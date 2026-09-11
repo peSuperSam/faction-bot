@@ -1,0 +1,39 @@
+[
+  {
+    "id": "iraque",
+    "label": "Iraque",
+    "role": "Munição leve",
+    "hours": "Pico a partir das 18:00. Pode ter gente de manhã e à tarde.",
+    "aliases": ["iraque", "municao leve", "muni leve"]
+  },
+  {
+    "id": "galaxy",
+    "label": "Galaxy",
+    "role": "Munição pesada",
+    "hours": "Tarde e noite.",
+    "aliases": ["galaxy", "galaxi", "municao pesada", "muni pesada"]
+  },
+  {
+    "id": "alaska",
+    "label": "Alaska",
+    "role": "Lavagem e contrabando",
+    "hours": "Pico a partir das 18:00. Pode ter gente de manhã e à tarde.",
+    "aliases": ["alaska", "alasca", "lavagem", "contrabando"]
+  },
+  {
+    "id": "seita",
+    "label": "Seita",
+    "role": "Hospital ilegal",
+    "hours": "A partir das 18:00.",
+    "place": "Mega Mall",
+    "aliases": [
+      "seita",
+      "hospital ilegal",
+      "hp ilegal",
+      "hpilegal",
+      "mega mall",
+      "megamall"
+    ],
+    "imageStems": ["seita", "hpilegal", "hp-ilegal", "hospital-ilegal"]
+  }
+]

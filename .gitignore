@@ -1,0 +1,10 @@
+node_modules/
+.env
+data/*.sqlite
+data/*.sqlite-*
+data/ai-context/
+data/bot.lock
+data/backups/
+web/node_modules/
+web/dist/
+*.log

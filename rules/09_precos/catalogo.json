@@ -1,0 +1,174 @@
+[
+  {
+    "id": "lockpick",
+    "label": "Lockpick",
+    "group": "Desmanche",
+    "aliases": ["lockpick", "lock pick", "lockpik", "lokpick"],
+    "without": "$2.000",
+    "with": "$1.500"
+  },
+  {
+    "id": "macarico",
+    "label": "Maçarico",
+    "group": "Desmanche",
+    "aliases": ["macarico", "maçarico", "macaricu"],
+    "without": "$20.000",
+    "with": "$15.000"
+  },
+  {
+    "id": "bloqueador",
+    "label": "Bloqueador",
+    "group": "Desmanche",
+    "aliases": ["bloqueador"],
+    "without": "$2.500",
+    "with": "$2.000"
+  },
+  {
+    "id": "ticket",
+    "label": "Ticket Corrida",
+    "group": "Desmanche",
+    "aliases": ["ticket", "ticket corrida"],
+    "without": "$1.500",
+    "with": "$1.000"
+  },
+  {
+    "id": "desmanche-veiculo",
+    "label": "Desmanche de veículo",
+    "group": "Desmanche",
+    "aliases": ["desmanche de veiculo", "porcentagem do desmanche", "% desmanche"],
+    "without": "40%",
+    "with": "45%"
+  },
+  {
+    "id": "capsula",
+    "label": "Cápsula",
+    "group": "Valores Guetos",
+    "aliases": ["capsula", "capsulas"],
+    "unit": "$3"
+  },
+  {
+    "id": "projeto-pistola",
+    "label": "Projeto Pistola",
+    "group": "Valores Guetos",
+    "aliases": ["projeto pistola"],
+    "unit": "$3.000"
+  },
+  {
+    "id": "projeto-rifle",
+    "label": "Projeto Rifle",
+    "group": "Valores Guetos",
+    "aliases": ["projeto rifle", "projeto rilfe"],
+    "unit": "$12.000"
+  },
+  {
+    "id": "projeto-sub",
+    "label": "Projeto Sub",
+    "group": "Valores Guetos",
+    "aliases": ["projeto sub"],
+    "unit": "$6.000"
+  },
+  {
+    "id": "pt",
+    "label": "PT",
+    "group": "Arma leve",
+    "aliases": ["pt"],
+    "without": "30",
+    "with": "25"
+  },
+  {
+    "id": "mtar",
+    "label": "MTAR",
+    "group": "Arma leve",
+    "aliases": ["mtar"],
+    "without": "65",
+    "with": "55"
+  },
+  {
+    "id": "evo",
+    "label": "EVO",
+    "group": "Arma leve",
+    "aliases": ["evo"],
+    "without": "70",
+    "with": "60"
+  },
+  {
+    "id": "glock",
+    "label": "Glock Rajada",
+    "group": "Arma leve",
+    "aliases": ["glock", "glock rajada"],
+    "without": "45",
+    "with": "40"
+  },
+  {
+    "id": "uzi",
+    "label": "UZI",
+    "group": "Arma leve",
+    "aliases": ["uzi"],
+    "without": "45",
+    "with": "40"
+  },
+  {
+    "id": "ice",
+    "label": "ICE",
+    "group": "ICE",
+    "aliases": ["ice"],
+    "without": "250",
+    "with": "220"
+  },
+  {
+    "id": "g3",
+    "label": "G3",
+    "group": "Arma pesada",
+    "aliases": ["g3"],
+    "without": "135",
+    "with": "120"
+  },
+  {
+    "id": "ak47",
+    "label": "AK47",
+    "group": "Arma pesada",
+    "aliases": ["ak47", "ak 47"],
+    "without": "125",
+    "with": "110"
+  },
+  {
+    "id": "parafal",
+    "label": "PARAFAL",
+    "group": "Arma pesada",
+    "aliases": ["parafal"],
+    "without": "140",
+    "with": "125"
+  },
+  {
+    "id": "m4a4",
+    "label": "M4A4",
+    "group": "Arma pesada",
+    "aliases": ["m4a4"],
+    "without": "135",
+    "with": "120"
+  },
+  {
+    "id": "m4a1",
+    "label": "M4A1",
+    "group": "Arma pesada",
+    "aliases": ["m4a1"],
+    "without": "125",
+    "with": "110"
+  },
+  {
+    "id": "m16",
+    "label": "M16",
+    "group": "Arma pesada",
+    "aliases": ["m16"],
+    "without": "140",
+    "with": "125"
+  },
+  {
+    "id": "lanca",
+    "label": "Lança",
+    "group": "Lança",
+    "aliases": ["lanca", "lança"],
+    "without": "250",
+    "with": "220"
+  }
+]
