@@ -103,16 +103,22 @@ nav.side {
   border: 1px solid var(--line);
   background: rgba(232, 196, 138, 0.04);
 }
-.guild-avatar, .user-avatar {
+.guild-avatar, .user-avatar, .avatar-img, .avatar-fallback {
   flex: 0 0 auto;
   width: 32px;
   height: 32px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.avatar-img.round, .avatar-fallback.round { border-radius: 50%; }
+.avatar-img.square, .avatar-fallback.square { border-radius: 8px; }
+.avatar-fallback, .guild-avatar, .user-avatar {
   display: grid;
   place-items: center;
   background: var(--wine);
   color: var(--gold);
   font-family: "Cormorant Garamond", serif;
-  font-size: 19px;
+  font-size: 16px;
 }
 .guild-copy { min-width: 0; display: grid; gap: 3px; }
 .guild-copy strong, .user-card strong {
@@ -150,18 +156,47 @@ nav.side a {
   color: var(--muted);
   padding: 8px 10px;
   border-left: 2px solid transparent;
+  transition: color 0.22s ease, background 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+}
+nav.side a.nav-link {
+  border-radius: 0 10px 10px 0;
+  margin: 2px 0;
+}
+nav.side a.nav-link:hover {
+  color: var(--text);
+  background: rgba(232, 196, 138, 0.05);
+  transform: translateX(2px);
 }
 nav.side a.router-link-exact-active {
   color: var(--gold);
   border-left-color: var(--gold);
-  background: rgba(232, 196, 138, 0.06);
+  background: rgba(232, 196, 138, 0.08);
 }
 nav.side .side-footer a {
   border-left: 0;
   padding: 7px 10px;
   font-size: 13px;
 }
-.main { padding: 28px 32px 48px; }
+nav.side .side-footer a:hover {
+  color: var(--gold);
+}
+.main { padding: 28px 32px 48px; overflow: hidden; }
+.page-enter-active,
+.page-leave-active,
+.app-page-enter-active,
+.app-page-leave-active {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+.page-enter-from,
+.app-page-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.page-leave-to,
+.app-page-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -346,7 +381,22 @@ textarea.doc-editor {
   color: var(--gold);
   padding: 1px 8px;
   font-size: 12px;
-  margin-right: 6px;
+  margin: 0 6px 6px 0;
+}
+.member-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.member-cell .avatar-img,
+.member-cell .avatar-fallback {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+}
+.roles-cell {
+  white-space: normal;
+  max-width: 360px;
 }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
 .landing {
@@ -515,4 +565,16 @@ button.server-pick:hover:not(:disabled) {
   .feature-card { min-height: 220px; }
   .landing-footer { flex-wrap: wrap; gap: 12px; }
   .landing-footer .landing-brand { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  nav.side a,
+  .page-enter-active,
+  .page-leave-active,
+  .app-page-enter-active,
+  .app-page-leave-active {
+    transition: none;
+  }
+  nav.side a.nav-link:hover {
+    transform: none;
+  }
 }

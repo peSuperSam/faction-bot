@@ -16,6 +16,7 @@ const {
   reviewEntry,
   correctEntry,
   removeEntry,
+  getMembersPage,
 } = require('../src/web-services');
 
 describe('serviços do painel', () => {
@@ -64,5 +65,38 @@ describe('serviços do painel', () => {
     });
     const events = listMemberEvents({ guildId, limit: 5 });
     assert.equal(events[0].type, 'join');
+  });
+
+  it('traz cargos e avatar reais do Discord na lista de membros', async () => {
+    const discord = {
+      fetchRoles: async () => [
+        { id: 'guild-web', name: '@everyone', position: 0, color: 0 },
+        { id: '10', name: 'Líder', position: 8, color: 16766720 },
+        { id: '55', name: 'Staff', position: 4, color: 3447003 },
+      ],
+      listMembers: async () => [
+        {
+          nick: 'SuperSam',
+          avatar: null,
+          joined_at: '2026-09-07T00:09:12.497Z',
+          roles: ['10', '55', 'guild-web'],
+          user: {
+            id: 'u-lead',
+            username: 'sam',
+            global_name: 'SuperSam',
+            avatar: 'facehash',
+            bot: false,
+          },
+        },
+      ],
+    };
+    const page = await getMembersPage(guildId, discord);
+    assert.equal(page.members[0].tag, 'SuperSam');
+    assert.deepEqual(
+      page.members[0].roles.map((role) => role.name),
+      ['Líder', 'Staff'],
+    );
+    assert.match(page.members[0].avatar, /avatars\/u-lead\/facehash/);
+    assert.doesNotMatch(page.members[0].joinedAt, /T00:09/);
   });
 });

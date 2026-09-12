@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="members-page">
     <div class="topbar">
       <h1>Membros</h1>
     </div>
@@ -18,14 +18,27 @@
     <article class="card" style="margin-top: 16px">
       <h2>Lista</h2>
       <div class="table-wrap">
-        <table>
+        <table class="members-table">
           <thead>
             <tr><th>Membro</th><th>Cargos</th><th>Farm</th><th>Entrou</th></tr>
           </thead>
           <tbody>
             <tr v-for="row in data?.members || []" :key="row.userId">
-              <td>{{ row.tag }}</td>
-              <td><span class="role" v-for="role in row.roles" :key="role">{{ role }}</span></td>
+              <td>
+                <div class="member-cell">
+                  <Avatar :src="row.avatar" :name="row.tag" />
+                  <span>{{ row.tag }}</span>
+                </div>
+              </td>
+              <td class="roles-cell">
+                <span
+                  class="role"
+                  v-for="role in row.roles"
+                  :key="role.id"
+                  :style="roleStyle(role)"
+                >{{ role.name }}</span>
+                <span v-if="!row.roles?.length" class="muted">—</span>
+              </td>
               <td>{{ row.farmTotal }}</td>
               <td>{{ row.joinedAt }}</td>
             </tr>
@@ -57,9 +70,23 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
+import Avatar from '../components/Avatar.vue';
 
 const data = ref(null);
 const error = ref('');
+
+function roleStyle(role) {
+  const color = Number(role?.color || 0);
+  if (!color) {
+    return {};
+  }
+  const hex = `#${color.toString(16).padStart(6, '0')}`;
+  return {
+    color: hex,
+    borderColor: hex,
+    background: `${hex}22`,
+  };
+}
 
 onMounted(async () => {
   try {

@@ -39,7 +39,7 @@ const { circuitState } = require('./ai-llm');
 const { getAiContextTopic } = require('./user-context');
 const { farmBoardMessage } = require('./farm-commands');
 const { logEmbed } = require('./embeds');
-const { displayMaterial, formatQuantity, parsePositiveInt, truncate } = require('./util');
+const { displayMaterial, formatQuantity, parsePositiveInt, truncate, formatDateTime } = require('./util');
 const rest = require('./discord-rest');
 const documents = require('./documents');
 const { BOT_NAME } = require('./brand');
@@ -49,6 +49,7 @@ const {
   validateActions,
   validatePartnerships,
 } = require('./catalogs');
+const { discordAvatarUrl, discordRoleDtos } = require('./web-authz');
 
 function goalsWithProgress(guildId, periodId, onlyUserId = null) {
   return listGoals(guildId, periodId)
@@ -222,29 +223,40 @@ async function getMembersPage(guildId, discord = rest) {
   );
   let members = [];
   let warning = null;
+  let guildRoles = [];
+  try {
+    guildRoles = await discord.fetchRoles(guildId);
+  } catch {
+    guildRoles = [];
+  }
   try {
     const listed = await discord.listMembers(guildId);
     members = listed
       .filter((member) => !member.user?.bot)
       .map((member) => {
-        const roles = member.roles || [];
-        const tags = [];
-        if (settings.leader_role_id && roles.includes(settings.leader_role_id)) {
-          tags.push('líder');
+        const roleIds = member.roles || [];
+        const panelRoles = [];
+        if (settings.leader_role_id && roleIds.includes(settings.leader_role_id)) {
+          panelRoles.push('líder');
         }
-        if (settings.manager_role_id && roles.includes(settings.manager_role_id)) {
-          tags.push('gerente');
+        if (settings.manager_role_id && roleIds.includes(settings.manager_role_id)) {
+          panelRoles.push('gerente');
         }
-        if (settings.member_role_id && roles.includes(settings.member_role_id)) {
-          tags.push('membro');
+        if (settings.member_role_id && roleIds.includes(settings.member_role_id)) {
+          panelRoles.push('membro');
         }
         return {
           userId: member.user.id,
-          tag: member.user.global_name || member.user.username,
+          tag: member.nick || member.user.global_name || member.user.username,
           username: member.user.username,
-          joinedAt: member.joined_at,
+          avatar: discordAvatarUrl(member.user.id, member.user.avatar, {
+            guildId,
+            memberHash: member.avatar,
+          }),
+          joinedAt: formatDateTime(member.joined_at),
           nick: member.nick || null,
-          roles: tags,
+          roles: discordRoleDtos(roleIds, guildRoles, guildId),
+          panelRoles,
           farmTotal: farmed.get(member.user.id) || 0,
           farmed: farmed.has(member.user.id),
         };
@@ -256,7 +268,11 @@ async function getMembersPage(guildId, discord = rest) {
         : `Não foi possível listar membros: ${error.message}`;
   }
   const faction = settings.member_role_id
-    ? members.filter((member) => member.roles.includes('membro') || member.roles.includes('líder') || member.roles.includes('gerente'))
+    ? members.filter((member) =>
+        member.panelRoles.includes('membro') ||
+        member.panelRoles.includes('líder') ||
+        member.panelRoles.includes('gerente'),
+      )
     : members;
   return {
     period: periodDto(period),
@@ -277,7 +293,7 @@ function memberEventDto(row) {
     roleId: row.role_id,
     detail: row.detail,
     certainty: row.certainty,
-    createdAt: row.created_at,
+    createdAt: formatDateTime(row.created_at),
   };
 }
 

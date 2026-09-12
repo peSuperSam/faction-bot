@@ -56,6 +56,7 @@ module.exports = async function handler(req, res) {
   const session = signSession({
     sub: user.id,
     tag: user.global_name || user.username,
+    avatar: user.avatar || null,
   });
   const secure = cookiesSecure();
   res.setHeader('Set-Cookie', [

@@ -8,6 +8,8 @@ const {
   isDeveloper,
   listPanelGuilds,
   assertCanOpenGuild,
+  discordAvatarUrl,
+  guildIconUrl,
 } = require('./web-authz');
 const services = require('./web-services');
 const defaultDiscord = require('./discord-rest');
@@ -204,6 +206,7 @@ async function authenticate(req, url, discord) {
     tag,
     access,
     guild,
+    member,
   };
 }
 
@@ -223,6 +226,7 @@ async function dispatch(req, url, auth, discord) {
         user: {
           id: auth.userId,
           tag: auth.tag,
+          avatar: discordAvatarUrl(auth.userId, auth.session?.avatar),
           role: auth.access.isDeveloper ? 'developer' : null,
           isDeveloper: auth.access.isDeveloper,
           isLeader: false,
@@ -236,6 +240,11 @@ async function dispatch(req, url, auth, discord) {
       user: {
         id: auth.userId,
         tag: auth.tag,
+        avatar: discordAvatarUrl(
+          auth.userId,
+          auth.session?.avatar || auth.member?.user?.avatar,
+          { guildId, memberHash: auth.member?.avatar },
+        ),
         role: access.role,
         isDeveloper: access.isDeveloper,
         isLeader: access.isLeader,
@@ -245,6 +254,7 @@ async function dispatch(req, url, auth, discord) {
       guild: {
         id: guildId,
         name: auth.guild?.name || guildId,
+        icon: guildIconUrl(auth.guild),
       },
       needsGuild: false,
       settings: services.publicSettings(access.settings),

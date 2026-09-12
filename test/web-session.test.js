@@ -6,10 +6,11 @@ describe('sessão JWT', () => {
   const secret = 'test-session-secret-value';
 
   it('assina e verifica payload', () => {
-    const token = signSession({ sub: 'u1', tag: 'lead' }, { secret, ttlMs: 60_000 });
+    const token = signSession({ sub: 'u1', tag: 'lead', avatar: 'abc' }, { secret, ttlMs: 60_000 });
     const payload = verifySession(token, { secret });
     assert.equal(payload.sub, 'u1');
     assert.equal(payload.tag, 'lead');
+    assert.equal(payload.avatar, 'abc');
   });
 
   it('rejeita assinatura errada e token expirado', () => {

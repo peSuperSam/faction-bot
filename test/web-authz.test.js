@@ -8,7 +8,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'coroa-authz-'));
 process.env.DATABASE_PATH = path.join(tmp, 'farm.sqlite');
 process.env.WEB_DEV_USER_IDS = 'dev-1';
 
-const { resolveAccess, assertRole } = require('../src/web-authz');
+const { resolveAccess, assertRole, discordAvatarUrl, discordRoleDtos } = require('../src/web-authz');
 
 const ADMIN_PERM = '8';
 const MANAGE_GUILD_PERM = '32';
@@ -96,5 +96,25 @@ describe('autorização web', () => {
       settings,
     });
     assert.throws(() => assertRole(member, 'leader'), (error) => error.status === 403);
+  });
+
+  it('monta URL de avatar e cargos do Discord', () => {
+    assert.match(
+      discordAvatarUrl('123', 'ab12cd'),
+      /cdn\.discordapp.com\/avatars\/123\/ab12cd\.png/,
+    );
+    const roles = discordRoleDtos(
+      ['10', 'g1', '99'],
+      [
+        { id: 'g1', name: '@everyone', position: 0, color: 0 },
+        { id: '99', name: 'Staff', position: 2, color: 3447003 },
+        { id: '10', name: 'Líder', position: 5, color: 16766720 },
+      ],
+      'g1',
+    );
+    assert.deepEqual(
+      roles.map((role) => role.name),
+      ['Líder', 'Staff'],
+    );
   });
 });

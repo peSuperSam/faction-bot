@@ -17,6 +17,9 @@ import ServerPage from './pages/ServerPage.vue';
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior() {
+    return { top: 0 };
+  },
   routes: [
     { path: '/', component: LandingPage, meta: { public: true, landing: true } },
     { path: '/login', component: LoginPage, meta: { public: true } },

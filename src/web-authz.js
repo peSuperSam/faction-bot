@@ -118,7 +118,45 @@ function guildIconUrl(guild) {
   if (!guild?.id || !guild.icon) {
     return null;
   }
-  return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`;
+  const ext = String(guild.icon).startsWith('a_') ? 'gif' : 'png';
+  return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.${ext}?size=64`;
+}
+
+function discordAvatarUrl(userId, hash, { size = 64, guildId = null, memberHash = null } = {}) {
+  if (guildId && memberHash) {
+    const ext = String(memberHash).startsWith('a_') ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${memberHash}.${ext}?size=${size}`;
+  }
+  if (hash) {
+    const ext = String(hash).startsWith('a_') ? 'gif' : 'png';
+    return `https://cdn.discordapp.com/avatars/${userId}/${hash}.${ext}?size=${size}`;
+  }
+  if (!userId) {
+    return null;
+  }
+  try {
+    const index = Number(BigInt(String(userId)) >> 22n) % 6;
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+  } catch {
+    return 'https://cdn.discordapp.com/embed/avatars/0.png';
+  }
+}
+
+function discordRoleDtos(memberRoleIds, guildRoles = [], guildId = null) {
+  const ids = new Set((memberRoleIds || []).map(String));
+  return (guildRoles || [])
+    .filter(
+      (role) =>
+        ids.has(String(role.id)) &&
+        String(role.id) !== String(guildId || '') &&
+        role.name !== '@everyone',
+    )
+    .sort((left, right) => Number(right.position || 0) - Number(left.position || 0))
+    .map((role) => ({
+      id: String(role.id),
+      name: role.name,
+      color: Number(role.color || 0),
+    }));
 }
 
 function panelGuildDto(guild) {
@@ -221,4 +259,7 @@ module.exports = {
   listPanelGuilds,
   assertCanOpenGuild,
   panelGuildDto,
+  guildIconUrl,
+  discordAvatarUrl,
+  discordRoleDtos,
 };
