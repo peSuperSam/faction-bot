@@ -10,14 +10,16 @@ import AuditPage from './pages/AuditPage.vue';
 import AiPage from './pages/AiPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
 import StatusPage from './pages/StatusPage.vue';
+import LandingPage from './pages/LandingPage.vue';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/', component: LandingPage, meta: { public: true, landing: true } },
     { path: '/login', component: LoginPage, meta: { public: true } },
     { path: '/servidores', component: ServersPage, meta: { servers: true } },
     {
-      path: '/',
+      path: '/painel',
       component: ShellPage,
       children: [
         { path: '', component: DashboardPage },
@@ -50,9 +52,12 @@ router.beforeEach(async (to) => {
   if (needsGuild) {
     return { path: '/servidores' };
   }
+  if (to.path === '/') {
+    return { path: '/painel' };
+  }
   const need = rank[to.meta.min] || 0;
   if ((rank[me.user?.role] || 0) < need) {
-    return { path: '/' };
+    return { path: '/painel' };
   }
   to.meta.me = me;
   return true;
