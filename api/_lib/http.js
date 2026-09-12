@@ -48,6 +48,51 @@ async function readBody(req) {
   return JSON.stringify(req.body);
 }
 
+function firstQueryValue(value) {
+  if (Array.isArray(value)) {
+    return value[0] ? String(value[0]) : '';
+  }
+  return value == null ? '' : String(value);
+}
+
+function requestUrl(req) {
+  return new URL(req.url || '/', 'http://local');
+}
+
+function normalizeOraclePath(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  if (!path.startsWith('/v1/') || path.includes('..')) {
+    const error = new Error('Rota inválida.');
+    error.status = 400;
+    throw error;
+  }
+  return path;
+}
+
+function resolveOraclePath(req) {
+  const url = requestUrl(req);
+  const fromQuery = url.searchParams.get('path') || firstQueryValue(req.query?.path);
+  if (fromQuery) {
+    return normalizeOraclePath(fromQuery);
+  }
+  const prefix = '/api/proxy';
+  if (url.pathname.startsWith(`${prefix}/`)) {
+    return normalizeOraclePath(url.pathname.slice(prefix.length));
+  }
+  return '';
+}
+
+function oracleQueryString(req) {
+  const url = requestUrl(req);
+  url.searchParams.delete('path');
+  const query = url.searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
 function sendJson(res, status, payload, headers = {}) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -64,7 +109,7 @@ async function proxyToOracle(req, res, { path, session }) {
     sendJson(res, 500, { error: 'WEB_API_BASE_URL ou WEB_API_SECRET ausente na Vercel.' });
     return;
   }
-  const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const query = oracleQueryString(req);
   const headers = {
     'X-Coroa-Service': secret,
     'X-Coroa-User-Id': session.payload.sub,
@@ -114,4 +159,6 @@ module.exports = {
   sessionFromRequest,
   sendJson,
   proxyToOracle,
+  resolveOraclePath,
+  oracleQueryString,
 };

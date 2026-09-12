@@ -16,7 +16,11 @@ async function request(path, options = {}) {
     try {
       data = JSON.parse(text);
     } catch {
-      data = { error: text };
+      data = {
+        error: /NOT_FOUND/i.test(text)
+          ? 'Rota da API não encontrada.'
+          : 'Falha na requisição.',
+      };
     }
   }
   if (!response.ok) {
@@ -59,7 +63,10 @@ export function clearMe() {
 
 export function api(path, options = {}) {
   const body = options.body == null ? undefined : JSON.stringify(options.body);
-  return request(`/api/proxy${path}`, {
+  const url = new URL(path, 'http://local');
+  const search = new URLSearchParams(url.search);
+  search.set('path', url.pathname);
+  return request(`/api/proxy?${search}`, {
     method: options.method || 'GET',
     body,
   });

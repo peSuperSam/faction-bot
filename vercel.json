@@ -4,7 +4,13 @@
   "installCommand": "npm install && npm install --prefix web",
   "buildCommand": "npm run build --prefix web",
   "outputDirectory": "web/dist",
+  "functions": {
+    "api/proxy.js": {
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
+    { "source": "/api/proxy/:path*", "destination": "/api/proxy?path=/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
