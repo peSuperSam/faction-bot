@@ -3,6 +3,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const { currentWeekInfo } = require('./periods');
 const { normalizeMaterial } = require('./util');
+const { migrate } = require('./db-schema');
 
 const databasePath = path.resolve(
   process.env.DATABASE_PATH || './data/farm.sqlite',
@@ -13,17 +14,9 @@ const db = new Database(databasePath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-function tableColumns(table) {
-  return db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
-}
-
-function addColumnIfMissing(table, name, definition) {
-  if (!tableColumns(table).includes(name)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
-  }
-}
-
-function migrate() {
+/* Schema and migrations live in db-schema.js. The domain queries remain here
+ * temporarily to preserve the existing db module API during the refactor. */
+/*
   db.exec(`
     CREATE TABLE IF NOT EXISTS farm_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -363,7 +356,9 @@ function migrate() {
   addColumnIfMissing('ai_logs', 'request_id', 'TEXT');
   migrateKnowledgeGuildScope();
 }
+*/
 
+/*
 function migrateKnowledgeGuildScope() {
   const cols = tableColumns('knowledge_documents');
   let rebuiltDocs = false;
@@ -450,8 +445,9 @@ function rebuildKnowledgeFts({ reindex = false } = {}) {
   });
   tx(rows);
 }
+*/
 
-migrate();
+migrate(db);
 
 function ensureCurrentPeriod(guildId) {
   const week = currentWeekInfo();
