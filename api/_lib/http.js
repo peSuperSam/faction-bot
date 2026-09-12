@@ -1,4 +1,10 @@
-const { readCookie, COOKIE_NAME, verifySession } = require('../../src/web-session');
+const {
+  readCookie,
+  COOKIE_NAME,
+  verifySession,
+  signSession,
+  sessionCookie,
+} = require('../../src/web-session');
 
 function publicBase(req) {
   const configured = String(process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
@@ -65,6 +71,9 @@ async function proxyToOracle(req, res, { path, session }) {
     'X-Coroa-Session': session.token,
     'X-Coroa-Origin': publicBase(req),
   };
+  if (session.payload.guildId) {
+    headers['X-Coroa-Guild-Id'] = String(session.payload.guildId);
+  }
   const method = req.method || 'GET';
   let body;
   if (method !== 'GET' && method !== 'HEAD') {
@@ -75,10 +84,27 @@ async function proxyToOracle(req, res, { path, session }) {
   }
   const upstream = await fetch(`${base}${path}${query}`, { method, headers, body: body || undefined });
   const text = await upstream.text();
-  res.writeHead(upstream.status, {
+  const responseHeaders = {
     'Content-Type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-  });
+  };
+  const pickerPath = String(path || '').replace(/\/+$/, '');
+  if (pickerPath === '/v1/guilds/select' && upstream.ok) {
+    try {
+      const data = JSON.parse(text);
+      if (data?.ok && data?.guild?.id) {
+        const token = signSession({
+          sub: session.payload.sub,
+          tag: session.payload.tag,
+          guildId: String(data.guild.id),
+        });
+        responseHeaders['Set-Cookie'] = sessionCookie(token, { secure: cookiesSecure() });
+      }
+    } catch {
+      // resposta do Oracle segue igual; o cookie só entra se a seleção for válida
+    }
+  }
+  res.writeHead(upstream.status, responseHeaders);
   res.end(text);
 }
 

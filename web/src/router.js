@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { fetchMe } from './api';
 import LoginPage from './pages/LoginPage.vue';
+import ServersPage from './pages/ServersPage.vue';
 import ShellPage from './pages/ShellPage.vue';
 import DashboardPage from './pages/DashboardPage.vue';
 import FarmPage from './pages/FarmPage.vue';
@@ -14,6 +15,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: LoginPage, meta: { public: true } },
+    { path: '/servidores', component: ServersPage, meta: { servers: true } },
     {
       path: '/',
       component: ShellPage,
@@ -40,8 +42,16 @@ router.beforeEach(async (to) => {
   if (!me) {
     return { path: '/login', query: { next: to.fullPath } };
   }
+  const needsGuild = Boolean(me.needsGuild || !me.guild?.id);
+  if (to.meta.servers) {
+    to.meta.me = me;
+    return true;
+  }
+  if (needsGuild) {
+    return { path: '/servidores' };
+  }
   const need = rank[to.meta.min] || 0;
-  if ((rank[me.user.role] || 0) < need) {
+  if ((rank[me.user?.role] || 0) < need) {
     return { path: '/' };
   }
   to.meta.me = me;

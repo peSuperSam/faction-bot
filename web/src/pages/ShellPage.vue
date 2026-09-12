@@ -3,6 +3,7 @@
     <nav class="side">
       <div>
         <div class="brand" style="font-size: 28px; color: var(--gold)">Coroa</div>
+        <div class="muted">{{ me.guild?.name || 'Servidor' }}</div>
         <div class="muted">{{ me.user.tag }} · {{ label(me.user.role) }}</div>
       </div>
       <div>
@@ -13,6 +14,7 @@
         <router-link v-if="can('leader')" to="/ia">IA</router-link>
         <router-link v-if="can('leader')" to="/config">Configuração</router-link>
         <router-link to="/status">Status</router-link>
+        <router-link to="/servidores">Trocar servidor</router-link>
       </div>
       <a class="muted" href="/api/auth/logout">Sair</a>
     </nav>

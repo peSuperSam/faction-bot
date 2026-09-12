@@ -2,7 +2,13 @@ const http = require('node:http');
 const { URL } = require('node:url');
 const { getSettings } = require('./db');
 const { verifySession } = require('./web-session');
-const { resolveAccess, assertRole, isDeveloper } = require('./web-authz');
+const {
+  resolveAccess,
+  assertRole,
+  isDeveloper,
+  listPanelGuilds,
+  assertCanOpenGuild,
+} = require('./web-authz');
 const services = require('./web-services');
 const defaultDiscord = require('./discord-rest');
 
@@ -25,10 +31,6 @@ function allowedOrigins() {
     .split(/[,\s]+/)
     .map((value) => value.trim())
     .filter(Boolean);
-}
-
-function configuredGuildId() {
-  return String(process.env.DISCORD_GUILD_ID || '').trim();
 }
 
 function readHeader(req, name) {
@@ -98,7 +100,14 @@ function resetRateLimitForTests() {
   rateBuckets.clear();
 }
 
-async function authenticate(req, discord) {
+function isGuildPickerRoute(method, pathname) {
+  return (
+    (method === 'GET' && pathname === '/v1/guilds') ||
+    (method === 'POST' && pathname === '/v1/guilds/select')
+  );
+}
+
+async function authenticate(req, url, discord) {
   const expected = serviceSecret();
   if (!expected) {
     throw new HttpError(500, 'WEB_API_SECRET não configurado.');
@@ -119,10 +128,28 @@ async function authenticate(req, discord) {
     throw new HttpError(401, 'Sessão ausente.');
   }
   noteRate(`user:${userId}`);
-  const guildId = configuredGuildId();
-  if (!guildId) {
-    throw new HttpError(500, 'DISCORD_GUILD_ID ausente.');
+  const guildId =
+    session?.guildId ||
+    readHeader(req, 'x-coroa-guild-id') ||
+    '';
+  const base = {
+    guildId: guildId || null,
+    userId: String(userId),
+    tag: session?.tag || userId,
+    access: resolveAccess({ userId }),
+    session,
+  };
+
+  if (isGuildPickerRoute(req.method, url.pathname)) {
+    return base;
   }
+  if (req.method === 'GET' && url.pathname === '/v1/me' && !guildId) {
+    return base;
+  }
+  if (!guildId) {
+    throw new HttpError(409, 'Selecione um servidor.');
+  }
+
   let member = null;
   let roles = [];
   let guild = { id: guildId };
@@ -130,14 +157,14 @@ async function authenticate(req, discord) {
     member = await discord.fetchMember(guildId, userId);
   } catch {
     if (!isDeveloper(userId)) {
-      throw new HttpError(403, 'Você precisa estar no servidor da facção.');
+      throw new HttpError(403, 'Você precisa ser administrador deste servidor.');
     }
   }
   try {
     roles = await discord.fetchRoles(guildId);
     guild = await discord.fetchGuild(guildId);
   } catch {
-    // cargos configurados ainda bastam para líder/gerente/membro
+    // desenvolvedor ainda pode abrir o painel
   }
   const access = resolveAccess({
     userId,
@@ -146,14 +173,21 @@ async function authenticate(req, discord) {
     guild,
     settings: getSettings(guildId),
   });
-  if (access.role === 'none') {
-    throw new HttpError(403, 'Sem cargo da facção para acessar o painel.');
+  if (!access.canOpenPanel) {
+    if (req.method === 'GET' && url.pathname === '/v1/me') {
+      return { ...base, guildId: null };
+    }
+    throw new HttpError(
+      403,
+      'Apenas administradores deste servidor podem usar o painel.',
+    );
   }
   return {
+    ...base,
     guildId,
-    userId: String(userId),
     tag: session?.tag || member?.user?.global_name || member?.user?.username || userId,
     access,
+    guild,
   };
 }
 
@@ -168,6 +202,20 @@ async function dispatch(req, url, auth, discord) {
   const { guildId, access } = auth;
 
   if (method === 'GET' && pathname === '/v1/me') {
+    if (!guildId) {
+      return {
+        user: {
+          id: auth.userId,
+          tag: auth.tag,
+          role: auth.access.isDeveloper ? 'developer' : null,
+          isDeveloper: auth.access.isDeveloper,
+          isLeader: false,
+          isManager: false,
+        },
+        guild: null,
+        needsGuild: true,
+      };
+    }
     return {
       user: {
         id: auth.userId,
@@ -176,9 +224,34 @@ async function dispatch(req, url, auth, discord) {
         isDeveloper: access.isDeveloper,
         isLeader: access.isLeader,
         isManager: access.isManager,
+        canOpenPanel: access.canOpenPanel,
       },
+      guild: {
+        id: guildId,
+        name: auth.guild?.name || guildId,
+      },
+      needsGuild: false,
       settings: services.publicSettings(access.settings),
     };
+  }
+
+  if (method === 'GET' && pathname === '/v1/guilds') {
+    const guilds = await listPanelGuilds({ userId: auth.userId, discord });
+    return { guilds };
+  }
+
+  if (method === 'POST' && pathname === '/v1/guilds/select') {
+    const body = await parseBody(req);
+    const selected = String(body?.guildId || '').trim();
+    if (!selected) {
+      throw new HttpError(400, 'Servidor inválido.');
+    }
+    const opened = await assertCanOpenGuild({
+      userId: auth.userId,
+      guildId: selected,
+      discord,
+    });
+    return { ok: true, guild: opened.guild };
   }
 
   if (method === 'GET' && pathname === '/v1/dashboard') {
@@ -312,7 +385,7 @@ function createWebHandler(overrides = {}) {
       noteRate(`ip:${readHeader(req, 'x-forwarded-for') || req.socket.remoteAddress || 'local'}`, {
         max: 120,
       });
-      const auth = await authenticate(req, discord);
+      const auth = await authenticate(req, url, discord);
       const payload = await dispatch(req, url, auth, discord);
       sendJson(res, 200, payload);
     } catch (error) {

@@ -106,6 +106,10 @@ async function fetchBotUser() {
   return discordRequest('GET', '/users/@me');
 }
 
+async function listBotGuilds() {
+  return discordRequest('GET', '/users/@me/guilds');
+}
+
 async function sendMessage(channelId, payload) {
   return discordRequest('POST', `/channels/${channelId}/messages`, {
     body: payload,
@@ -126,6 +130,7 @@ module.exports = {
   fetchRoles,
   listMembers,
   fetchBotUser,
+  listBotGuilds,
   sendMessage,
   editMessage,
 };

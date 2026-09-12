@@ -62,6 +62,6 @@ module.exports = async function handler(req, res) {
     sessionCookie(session, { secure }),
     clearCookie(OAUTH_COOKIE, { secure }),
   ]);
-  res.writeHead(302, { Location: '/' });
+  res.writeHead(302, { Location: '/servidores' });
   res.end();
 };

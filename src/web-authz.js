@@ -81,10 +81,10 @@ function resolveAccess({ userId, member = null, roles = [], guild = null, settin
   const guildId = settings?.guild_id || guild?.id || process.env.DISCORD_GUILD_ID;
   const resolvedSettings = settings || getSettings(guildId);
   const developer = isDeveloper(userId);
+  const guildAdmin = isGuildAdminMember(member, roles, guild);
+  const canOpenPanel = developer || guildAdmin;
   const leader =
-    developer ||
-    isGuildAdminMember(member, roles, guild) ||
-    hasConfiguredRole(member, resolvedSettings.leader_role_id);
+    canOpenPanel || hasConfiguredRole(member, resolvedSettings.leader_role_id);
   const manager = leader || hasConfiguredRole(member, resolvedSettings.manager_role_id);
   const memberOk =
     manager ||
@@ -93,7 +93,7 @@ function resolveAccess({ userId, member = null, roles = [], guild = null, settin
   let role = 'none';
   if (developer) {
     role = 'developer';
-  } else if (leader) {
+  } else if (guildAdmin || hasConfiguredRole(member, resolvedSettings.leader_role_id)) {
     role = 'leader';
   } else if (manager) {
     role = 'manager';
@@ -104,12 +104,100 @@ function resolveAccess({ userId, member = null, roles = [], guild = null, settin
     userId: String(userId),
     role,
     isDeveloper: developer,
+    isGuildAdmin: guildAdmin,
+    canOpenPanel,
     isLeader: leader,
     isManager: manager,
     isMember: Boolean(member) && memberOk,
     inGuild: Boolean(member),
     settings: resolvedSettings,
   };
+}
+
+function guildIconUrl(guild) {
+  if (!guild?.id || !guild.icon) {
+    return null;
+  }
+  return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`;
+}
+
+function panelGuildDto(guild) {
+  return {
+    id: String(guild.id),
+    name: guild.name || guild.id,
+    icon: guildIconUrl(guild),
+  };
+}
+
+async function listPanelGuilds({ userId, discord }) {
+  const botGuilds = (await discord.listBotGuilds()) || [];
+  const allowed = [];
+  for (const guild of botGuilds) {
+    if (isDeveloper(userId)) {
+      allowed.push(panelGuildDto(guild));
+      continue;
+    }
+    try {
+      const member = await discord.fetchMember(guild.id, userId);
+      const roles = await discord.fetchRoles(guild.id);
+      const full = await discord.fetchGuild(guild.id);
+      const access = resolveAccess({
+        userId,
+        member,
+        roles,
+        guild: full,
+        settings: getSettings(guild.id),
+      });
+      if (access.canOpenPanel) {
+        allowed.push(panelGuildDto({ ...guild, ...full }));
+      }
+    } catch {
+      // usuário sem acesso neste servidor
+    }
+  }
+  return allowed;
+}
+
+async function assertCanOpenGuild({ userId, guildId, discord }) {
+  const botGuilds = (await discord.listBotGuilds()) || [];
+  const listed = botGuilds.find((guild) => String(guild.id) === String(guildId));
+  if (!listed) {
+    const error = new Error('O Coroa não está neste servidor.');
+    error.status = 403;
+    throw error;
+  }
+  if (isDeveloper(userId)) {
+    const full = await discord.fetchGuild(guildId).catch(() => listed);
+    return {
+      guild: panelGuildDto({ ...listed, ...full }),
+      access: resolveAccess({ userId, guild: full }),
+    };
+  }
+  let member = null;
+  let roles = [];
+  let full = listed || { id: guildId };
+  try {
+    member = await discord.fetchMember(guildId, userId);
+    roles = await discord.fetchRoles(guildId);
+    full = await discord.fetchGuild(guildId);
+  } catch {
+    const error = new Error('Você precisa ser administrador deste servidor.');
+    error.status = 403;
+    throw error;
+  }
+  const access = resolveAccess({
+    userId,
+    member,
+    roles,
+    guild: full,
+    settings: getSettings(guildId),
+  });
+  if (!access.canOpenPanel) {
+    const error = new Error('Apenas administradores deste servidor podem usar o painel.');
+    error.status = 403;
+    throw error;
+  }
+  return { guild: panelGuildDto(full), access };
 }
 
 function assertRole(access, minimum) {
@@ -127,6 +215,10 @@ module.exports = {
   developerIds,
   isDeveloper,
   memberRoleIds,
+  isGuildAdminMember,
   resolveAccess,
   assertRole,
+  listPanelGuilds,
+  assertCanOpenGuild,
+  panelGuildDto,
 };

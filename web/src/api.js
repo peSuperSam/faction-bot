@@ -36,7 +36,16 @@ export async function fetchMe({ force = false } = {}) {
     cachedMe = await request('/api/auth/me');
     cachedAt = Date.now();
     return cachedMe;
-  } catch {
+  } catch (error) {
+    if (error.status === 409) {
+      cachedMe = {
+        user: { id: '', tag: '', role: null, isDeveloper: false },
+        guild: null,
+        needsGuild: true,
+      };
+      cachedAt = Date.now();
+      return cachedMe;
+    }
     cachedMe = null;
     cachedAt = 0;
     return null;
@@ -54,4 +63,17 @@ export function api(path, options = {}) {
     method: options.method || 'GET',
     body,
   });
+}
+
+export function listGuilds() {
+  return api('/v1/guilds');
+}
+
+export async function selectGuild(guildId) {
+  const data = await api('/v1/guilds/select', {
+    method: 'POST',
+    body: { guildId },
+  });
+  clearMe();
+  return data;
 }

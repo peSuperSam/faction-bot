@@ -23,7 +23,7 @@ module.exports = function handler(req, res) {
     client_id: clientId,
     redirect_uri: `${publicBase(req)}/api/auth/callback`,
     response_type: 'code',
-    scope: 'identify',
+    scope: 'identify guilds',
     state,
     code_challenge: pkceChallenge(verifier),
     code_challenge_method: 'S256',

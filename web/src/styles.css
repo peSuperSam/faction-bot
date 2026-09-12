@@ -167,6 +167,34 @@ input, select, textarea {
   margin-right: 6px;
 }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; }
+.servers-card { width: min(760px, 100%); }
+.server-grid { margin-top: 8px; }
+button.server-pick {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+button.server-pick:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+.server-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.server-icon.fallback {
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  font-family: "Cormorant Garamond", serif;
+  font-size: 24px;
+  background: var(--bg);
+}
 @media (max-width: 840px) {
   .shell { grid-template-columns: 1fr; }
   nav.side { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
