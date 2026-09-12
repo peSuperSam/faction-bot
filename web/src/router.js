@@ -44,6 +44,14 @@ const rank = { none: 0, member: 1, manager: 2, leader: 3, developer: 4 };
 
 router.beforeEach(async (to) => {
   if (to.meta.public) {
+    if (to.path === '/login') {
+      const me = await fetchMe();
+      if (me) {
+        return me.needsGuild || !me.guild?.id
+          ? { path: '/servidores' }
+          : { path: '/painel' };
+      }
+    }
     return true;
   }
   const me = await fetchMe();
@@ -57,9 +65,6 @@ router.beforeEach(async (to) => {
   }
   if (needsGuild) {
     return { path: '/servidores' };
-  }
-  if (to.path === '/') {
-    return { path: '/painel' };
   }
   const need = rank[to.meta.min] || 0;
   if ((rank[me.user?.role] || 0) < need) {

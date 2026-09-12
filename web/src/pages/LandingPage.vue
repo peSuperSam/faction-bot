@@ -8,7 +8,7 @@
           <small>Gestão de operações</small>
         </span>
       </router-link>
-      <a class="landing-login-link" href="/api/auth/discord">Entrar com Discord <span>↗</span></a>
+      <a class="landing-login-link" :href="panelHref">Entrar com Discord <span>↗</span></a>
     </nav>
 
     <section class="landing-hero">
@@ -20,7 +20,7 @@
           feito para quem lidera.
         </p>
         <div class="hero-actions">
-          <a class="btn landing-cta" href="/api/auth/discord">Acessar painel <span>→</span></a>
+          <a class="btn landing-cta" :href="panelHref">Acessar painel <span>→</span></a>
           <a class="text-link" href="#recursos">Conhecer recursos <span>↓</span></a>
         </div>
         <div class="trust-line">
@@ -121,7 +121,22 @@
     <footer class="landing-footer">
       <span class="landing-brand"><span class="brand-mark">C</span><strong>Coroa</strong></span>
       <span>Gestão de operações com clareza.</span>
-      <a href="/api/auth/discord">Entrar com Discord ↗</a>
+      <a :href="panelHref">Entrar com Discord ↗</a>
     </footer>
   </main>
 </template>
+
+<script setup>
+import { onMounted, ref } from 'vue';
+import { fetchMe } from '../api';
+
+const panelHref = ref('/api/auth/discord');
+
+onMounted(async () => {
+  const me = await fetchMe();
+  if (!me) {
+    return;
+  }
+  panelHref.value = me.needsGuild || !me.guild?.id ? '/servidores' : '/painel';
+});
+</script>

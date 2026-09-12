@@ -56,7 +56,7 @@ async function choose(guild) {
   try {
     await selectGuild(guild.id);
     clearMe();
-    await router.replace('/');
+    await router.replace('/painel');
   } catch (err) {
     error.value = err.message || 'Não foi possível abrir este servidor.';
     busyId.value = null;
