@@ -2,10 +2,10 @@
   <main class="landing">
     <nav class="landing-nav">
       <router-link class="landing-brand" to="/">
-        <span class="brand-mark">C</span>
+        <span class="brand-mark">O</span>
         <span>
-          <strong>Coroa</strong>
-          <small>Gestão de operações</small>
+          <strong>{{ SITE_NAME }}</strong>
+          <small>{{ SITE_TAGLINE }}</small>
         </span>
       </router-link>
       <a class="landing-login-link" :href="panelHref">Entrar com Discord <span>↗</span></a>
@@ -35,12 +35,12 @@
         <div class="mock-window">
           <div class="mock-topbar">
             <div class="mock-dots"><i></i><i></i><i></i></div>
-            <span>coroa / resumo</span>
+            <span>olympus / resumo</span>
             <span class="mock-live"><b></b> AO VIVO</span>
           </div>
           <div class="mock-content">
             <div class="mock-sidebar">
-              <div class="mock-logo">C</div>
+              <div class="mock-logo">O</div>
               <span class="mock-active"></span><span></span><span></span><span></span>
             </div>
             <div class="mock-dashboard">
@@ -119,7 +119,7 @@
     </section>
 
     <footer class="landing-footer">
-      <span class="landing-brand"><span class="brand-mark">C</span><strong>Coroa</strong></span>
+      <span class="landing-brand"><span class="brand-mark">O</span><strong>{{ SITE_NAME }}</strong></span>
       <span>Gestão de operações com clareza.</span>
       <a :href="panelHref">Entrar com Discord ↗</a>
     </footer>
@@ -129,6 +129,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { fetchMe } from '../api';
+import { SITE_NAME, SITE_TAGLINE } from '../brand';
 
 const panelHref = ref('/api/auth/discord');
 

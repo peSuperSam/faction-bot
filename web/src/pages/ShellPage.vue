@@ -2,10 +2,10 @@
   <div class="shell" v-if="me">
     <nav class="side">
       <div class="side-brand">
-        <div class="brand-mark">C</div>
+        <div class="brand-mark">O</div>
         <div>
-          <div class="brand">Coroa</div>
-          <div class="brand-subtitle">Painel de gestão</div>
+          <div class="brand">{{ SITE_NAME }}</div>
+          <div class="brand-subtitle">{{ SITE_TAGLINE }}</div>
         </div>
       </div>
       <div class="guild-card">
@@ -54,6 +54,7 @@
 import { ref, onMounted } from 'vue';
 import { fetchMe } from '../api';
 import Avatar from '../components/Avatar.vue';
+import { SITE_NAME, SITE_TAGLINE } from '../brand';
 
 const rank = { none: 0, member: 1, manager: 2, leader: 3, developer: 4 };
 const me = ref(null);
