@@ -1,14 +1,15 @@
 ---
-description: Sempre criar um commit git ao terminar o trabalho neste repositório
+description: Sempre criar commit e fazer push ao terminar o trabalho neste repositório
 alwaysApply: true
 ---
 
-# Sempre faça commit
+# Sempre faça commit e push
 
-Ao concluir uma implementação, correção ou alteração pedida, crie um commit git sem esperar o usuário pedir de novo.
+Ao concluir uma implementação, correção ou alteração pedida, crie um commit git e faça push em seguida, sem esperar o usuário pedir de novo.
 
 - Não altere `git config`
-- Não faça push a menos que o usuário peça
+- Depois do commit, rode `git push` (ou `git push -u origin HEAD` se a branch ainda não tiver upstream)
+- Não use force push em `main`/`master`
 - Não commite segredos (`.env`, tokens, credenciais)
 - Mensagem em 1–2 frases, focada no porquê
 - Autor do commit: `peSuperSam` / `contatomateus@gmail.com` via variáveis de ambiente daquele comando, sem gravar no config
