@@ -1,0 +1,14 @@
+---
+description: Sempre criar um commit git ao terminar o trabalho neste repositório
+alwaysApply: true
+---
+
+# Sempre faça commit
+
+Ao concluir uma implementação, correção ou alteração pedida, crie um commit git sem esperar o usuário pedir de novo.
+
+- Não altere `git config`
+- Não faça push a menos que o usuário peça
+- Não commite segredos (`.env`, tokens, credenciais)
+- Mensagem em 1–2 frases, focada no porquê
+- Autor do commit: `peSuperSam` / `contatomateus@gmail.com` via variáveis de ambiente daquele comando, sem gravar no config
