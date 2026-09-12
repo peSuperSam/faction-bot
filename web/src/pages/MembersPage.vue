@@ -68,12 +68,10 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
-import { api } from '../api';
+import { usePageData } from '../usePage';
 import Avatar from '../components/Avatar.vue';
 
-const data = ref(null);
-const error = ref('');
+const { data, error } = usePageData('/v1/members');
 
 function roleStyle(role) {
   const color = Number(role?.color || 0);
@@ -88,11 +86,4 @@ function roleStyle(role) {
   };
 }
 
-onMounted(async () => {
-  try {
-    data.value = await api('/v1/members');
-  } catch (err) {
-    error.value = err.message;
-  }
-});
 </script>

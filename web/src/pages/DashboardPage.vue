@@ -4,7 +4,8 @@
       <div>
         <div class="eyebrow">VISÃO GERAL</div>
         <h1>Semana atual</h1>
-        <p class="muted">{{ data?.period?.label }} · {{ data?.period?.startsAt }} → {{ data?.period?.endsAt }}</p>
+        <p class="muted" v-if="data?.period">{{ data.period.label }} · {{ data.period.startsAt }} → {{ data.period.endsAt }}</p>
+        <p class="muted" v-else>Carregando semana…</p>
       </div>
       <div class="period-chip">
         <span class="status-dot"></span>
@@ -12,6 +13,9 @@
       </div>
     </div>
     <p v-if="error" class="banner bad">{{ error }}</p>
+    <div class="grid metric-grid" v-if="!data && !error">
+      <article class="card metric-card skel-block" v-for="n in 4" :key="n"></article>
+    </div>
     <div class="grid metric-grid" v-if="data">
       <article class="card metric-card" v-for="item in summary" :key="item.label">
         <div class="metric-icon" :class="item.tone">{{ item.icon }}</div>
@@ -49,7 +53,7 @@
                   </div>
                 </td>
               </tr>
-              <tr v-if="!data?.goals?.length">
+              <tr v-if="data && !data.goals?.length">
                 <td colspan="2" class="empty-cell">Nenhuma meta cadastrada nesta semana.</td>
               </tr>
             </tbody>
@@ -75,7 +79,7 @@
                 <td class="member-name">{{ row.userTag }}</td>
                 <td class="total-value">{{ row.total }}</td>
               </tr>
-              <tr v-if="!data?.ranking?.length">
+              <tr v-if="data && !data.ranking?.length">
                 <td colspan="3" class="empty-cell">Ainda não há registros nesta semana.</td>
               </tr>
             </tbody>
@@ -87,11 +91,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { api } from '../api';
+import { computed } from 'vue';
+import { usePageData } from '../usePage';
 
-const data = ref(null);
-const error = ref('');
+const { data, error } = usePageData('/v1/dashboard');
 
 const summary = computed(() => [
   { label: 'Aprovados', value: data.value?.approvedCount ?? '—', icon: '✓', tone: 'green' },
@@ -107,11 +110,4 @@ function progress(goal) {
   return Math.min(100, Math.round((current / quantity) * 100));
 }
 
-onMounted(async () => {
-  try {
-    data.value = await api('/v1/dashboard');
-  } catch (err) {
-    error.value = err.message;
-  }
-});
 </script>

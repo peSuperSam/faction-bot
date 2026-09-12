@@ -40,29 +40,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { api, fetchMe } from '../api';
+import { computed, ref } from 'vue';
+import { api } from '../api';
+import { usePageData } from '../usePage';
 
-const data = ref(null);
-const error = ref('');
+const props = defineProps({ me: Object });
+const { data, error, reload } = usePageData('/v1/status');
 const busy = ref(false);
-const me = ref(null);
-const canBackup = computed(() => ['leader', 'developer'].includes(me.value?.user?.role));
-
-onMounted(async () => {
-  try {
-    me.value = await fetchMe();
-    data.value = await api('/v1/status');
-  } catch (err) {
-    error.value = err.message;
-  }
-});
+const canBackup = computed(() => ['leader', 'developer'].includes(props.me?.user?.role));
 
 async function backup() {
   busy.value = true;
   try {
-    const result = await api('/v1/backup', { method: 'POST' });
-    data.value = { ...data.value, backups: result.backups };
+    await api('/v1/backup', { method: 'POST' });
+    await reload({ force: true });
   } catch (err) {
     error.value = err.message;
   } finally {

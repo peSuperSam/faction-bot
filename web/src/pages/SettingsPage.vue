@@ -76,7 +76,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
-import { api } from '../api';
+import { api, invalidatePages, peekPage, prefetch } from '../api';
 
 const dashboard = ref(null);
 const busy = ref(false);
@@ -109,8 +109,8 @@ function applySettings(settings) {
   channelId.value = settings.farmChannelId || '';
 }
 
-async function load() {
-  dashboard.value = await api('/v1/dashboard');
+async function load({ force = false } = {}) {
+  dashboard.value = await prefetch('/v1/dashboard', { force });
   applySettings(dashboard.value.settings);
 }
 
@@ -135,7 +135,8 @@ async function addMaterial() {
     newMaterial.value = '';
     message.value = 'Material adicionado.';
     ok.value = true;
-    await load();
+    invalidatePages('/v1/dashboard', '/v1/farm');
+    await load({ force: true });
   } catch (err) {
     message.value = err.message;
     ok.value = false;
@@ -147,7 +148,8 @@ async function removeMaterial(name) {
     await api(`/v1/farm/materials/${encodeURIComponent(name)}`, { method: 'DELETE' });
     message.value = 'Material removido.';
     ok.value = true;
-    await load();
+    invalidatePages('/v1/dashboard', '/v1/farm');
+    await load({ force: true });
   } catch (err) {
     message.value = err.message;
     ok.value = false;
@@ -167,6 +169,11 @@ async function publish() {
 
 onMounted(async () => {
   try {
+    const cached = peekPage('/v1/dashboard');
+    if (cached?.settings) {
+      dashboard.value = cached;
+      applySettings(cached.settings);
+    }
     await load();
   } catch (err) {
     message.value = err.message;

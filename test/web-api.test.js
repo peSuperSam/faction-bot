@@ -210,6 +210,10 @@ describe('API web', () => {
       const dash = await call(port, { path: '/v1/dashboard', session });
       assert.equal(dash.status, 200);
       assert.ok(dash.json.period);
+      const farm = await call(port, { path: '/v1/farm', session });
+      assert.equal(farm.status, 200);
+      assert.ok(Array.isArray(farm.json.materials));
+      assert.ok(Array.isArray(farm.json.pending));
     });
   });
 
@@ -288,6 +292,17 @@ describe('API web', () => {
       });
       assert.equal(published.status, 200);
       assert.equal(published.json.ok, true);
+
+      const ai = await call(port, {
+        path: '/v1/ai',
+        userId: 'u-admin',
+        guildId: 'guild-api',
+      });
+      assert.equal(ai.status, 200);
+      assert.equal(
+        (ai.json.guildDocuments || []).some((doc) => doc.slug === 'local-api'),
+        true,
+      );
 
       const otherList = await call(port, {
         path: '/v1/documents',

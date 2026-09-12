@@ -1,11 +1,16 @@
 <template>
   <div>
     <div class="topbar">
-      <h1>{{ isNew ? 'Novo documento' : form.title || 'Documento' }}</h1>
+      <div>
+        <div class="eyebrow">REGRAS DA CIDADE</div>
+        <h1>{{ isNew ? 'Novo documento' : form.title || 'Documento' }}</h1>
+        <p class="muted">Rascunho fica só no painel. A IA só passa a usar o texto depois de publicar.</p>
+      </div>
       <div class="actions">
         <router-link class="btn ghost" to="/painel/documentos">Voltar</router-link>
         <button v-if="canEdit" class="btn" :disabled="busy" @click="save">Salvar rascunho</button>
-        <button v-if="canEdit" class="btn gold" :disabled="busy" @click="validate">Validar</button>
+        <button v-if="canEdit" class="btn" :disabled="busy" @click="validate">Validar</button>
+        <button v-if="canEdit && !isNew" class="btn gold" :disabled="busy" @click="publish">Publicar na IA</button>
       </div>
     </div>
     <p v-if="message" class="banner" :class="ok ? 'ok' : 'bad'">{{ message }}</p>
@@ -58,7 +63,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from '../api';
+import { api, invalidatePages } from '../api';
+
+defineOptions({ name: 'DocumentEditorPage' });
 
 const props = defineProps({ me: Object });
 const route = useRoute();
@@ -101,6 +108,7 @@ async function save() {
       });
       message.value = 'Documento criado.';
       ok.value = true;
+      invalidatePages('/v1/documents', '/v1/releases');
       await router.replace(`/painel/documentos/${created.document.id}`);
       return;
     }
@@ -110,6 +118,7 @@ async function save() {
     });
     message.value = 'Rascunho salvo.';
     ok.value = true;
+    invalidatePages('/v1/documents');
     await load();
   } catch (err) {
     message.value = err.message;
@@ -137,6 +146,41 @@ async function validate() {
   } finally {
     busy.value = false;
   }
+}
+
+async function publish() {
+  busy.value = true;
+  try {
+    await saveQuiet();
+    const result = await api('/v1/documents/publish', {
+      method: 'POST',
+      body: { documentIds: [Number(route.params.id)] },
+    });
+    if (!result.ok) {
+      message.value = (result.rejected || []).join(' · ') || 'Validação recusada.';
+      ok.value = false;
+    } else {
+      message.value = `Release ${result.releaseNumber} publicada. A IA desta cidade já está usando este documento.`;
+      ok.value = true;
+      invalidatePages('/v1/documents', '/v1/releases', '/v1/ai');
+      await load();
+    }
+  } catch (err) {
+    message.value = err.message;
+    ok.value = false;
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function saveQuiet() {
+  if (isNew.value) {
+    return;
+  }
+  await api(`/v1/documents/${route.params.id}`, {
+    method: 'PATCH',
+    body: { title: form.title, content: form.content, message: 'edição pelo painel' },
+  });
 }
 
 async function restore(versionNumber) {

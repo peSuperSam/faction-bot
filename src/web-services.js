@@ -194,8 +194,15 @@ function getFarmPage(guildId, { status = null, limit = 40, offset = 0 } = {}) {
     reviewedBy: entry.reviewed_by,
     reviewedAt: entry.reviewed_at,
   }));
+  const materials = listMaterials(guildId).map((item) => ({
+    id: item.id,
+    name: item.name,
+    displayName: item.display_name,
+    active: item.active,
+  }));
   return {
     period: periodDto(period),
+    materials,
     entries,
     total: countFarmEntries({ guildId, periodId: period.id, status: status || null }),
     pending: listPending(guildId, period.id).map((entry) => ({

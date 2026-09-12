@@ -26,17 +26,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
-import { api } from '../api';
+import { usePageData } from '../usePage';
 
-const data = ref(null);
-const error = ref('');
-
-onMounted(async () => {
-  try {
-    data.value = await api('/v1/audit');
-  } catch (err) {
-    error.value = err.message;
-  }
-});
+const { data, error } = usePageData('/v1/audit');
 </script>

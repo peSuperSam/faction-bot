@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { fetchMe } from './api';
+import { fetchMe, peekMe, ME_SESSION_TTL_MS } from './api';
 import LoginPage from './pages/LoginPage.vue';
 import ServersPage from './pages/ServersPage.vue';
 import ShellPage from './pages/ShellPage.vue';
@@ -45,19 +45,11 @@ const router = createRouter({
 
 const rank = { none: 0, member: 1, manager: 2, leader: 3, developer: 4 };
 
-router.beforeEach(async (to) => {
-  if (to.meta.public) {
-    if (to.path === '/login') {
-      const me = await fetchMe();
-      if (me) {
-        return me.needsGuild || !me.guild?.id
-          ? { path: '/servidores' }
-          : { path: '/painel' };
-      }
-    }
-    return true;
-  }
-  const me = await fetchMe();
+function isPanel(route) {
+  return route.matched.some((record) => record.path === '/painel');
+}
+
+function applySession(to, me) {
   if (!me) {
     return { path: '/login', query: { next: to.fullPath } };
   }
@@ -75,6 +67,48 @@ router.beforeEach(async (to) => {
   }
   to.meta.me = me;
   return true;
+}
+
+router.beforeEach(async (to, from) => {
+  if (to.meta.public) {
+    if (to.path === '/login') {
+      const me = await fetchMe();
+      if (me) {
+        return me.needsGuild || !me.guild?.id
+          ? { path: '/servidores' }
+          : { path: '/painel' };
+      }
+    }
+    return true;
+  }
+
+  const cached = peekMe();
+  if (cached && isPanel(from) && isPanel(to)) {
+    fetchMe({ maxAge: ME_SESSION_TTL_MS }).catch(() => {});
+    return applySession(to, cached);
+  }
+
+  const me = await fetchMe({
+    maxAge: isPanel(to) ? ME_SESSION_TTL_MS : 15_000,
+  });
+  return applySession(to, me);
+});
+
+let navTimer = 0;
+router.beforeEach((to, from) => {
+  if (to.fullPath === from.fullPath) {
+    return true;
+  }
+  window.clearTimeout(navTimer);
+  navTimer = window.setTimeout(() => {
+    document.body.classList.add('is-navigating');
+  }, 90);
+  return true;
+});
+
+router.afterEach(() => {
+  window.clearTimeout(navTimer);
+  document.body.classList.remove('is-navigating');
 });
 
 export default router;
