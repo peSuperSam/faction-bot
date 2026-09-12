@@ -101,7 +101,7 @@ function detectAmbiguity(text) {
   return null;
 }
 
-function resolveIntent(text, entities, filters) {
+function resolveIntent(text, entities, filters, guildId = null) {
   if (isCasualMessage(text)) {
     return 'chat';
   }
@@ -111,7 +111,7 @@ function resolveIntent(text, entities, filters) {
   if (PARTNER_CUES.test(text) || entities.partners.length > 0) {
     return 'partner';
   }
-  if (isPriceQuestion(text) || entities.prices.length > 0) {
+  if (isPriceQuestion(text, guildId) || entities.prices.length > 0) {
     return 'price';
   }
   if (
@@ -119,7 +119,7 @@ function resolveIntent(text, entities, filters) {
     isContingenteQuestion(text) ||
     isActionListQuestion(text) ||
     isActionFilterQuestion(text) ||
-    isNamedActionQuestion(text) ||
+    isNamedActionQuestion(text, guildId) ||
     entities.actions.length > 0 ||
     filters.contingente ||
     filters.weapon ||
@@ -140,12 +140,12 @@ function intentToTheme(intent) {
   return intent;
 }
 
-function parseQuestion(question, prior = null) {
+function parseQuestion(question, prior = null, guildId = null) {
   const text = normalizeChatText(question);
   const entities = {
-    prices: matchIds(text, getCatalog('prices')),
-    actions: matchIds(text, getCatalog('actions')),
-    partners: matchIds(text, getCatalog('partnerships')),
+    prices: matchIds(text, getCatalog('prices', guildId)),
+    actions: matchIds(text, getCatalog('actions', guildId)),
+    partners: matchIds(text, getCatalog('partnerships', guildId)),
   };
   const filters = {
     banditCount: wantedBanditCount(text),
@@ -158,7 +158,7 @@ function parseQuestion(question, prior = null) {
       : null,
   };
   const ambiguity = detectAmbiguity(text);
-  const intent = ambiguity ? 'clarify' : resolveIntent(text, entities, filters);
+  const intent = ambiguity ? 'clarify' : resolveIntent(text, entities, filters, guildId);
   const themeChanged = Boolean(
     intentToTheme(intent) &&
       prior?.theme &&
@@ -185,8 +185,8 @@ function parseQuestion(question, prior = null) {
   };
 }
 
-function questionTheme(value) {
-  return parseQuestion(value).theme;
+function questionTheme(value, guildId = null) {
+  return parseQuestion(value, null, guildId).theme;
 }
 
 module.exports = {

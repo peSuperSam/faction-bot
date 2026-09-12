@@ -25,13 +25,15 @@
       </div>
       <div class="nav-section">
         <div class="nav-label">Navegação</div>
-        <router-link to="/">Resumo</router-link>
-        <router-link to="/farm">Farm</router-link>
-        <router-link v-if="can('manager')" to="/membros">Membros</router-link>
-        <router-link v-if="can('manager')" to="/auditoria">Auditoria</router-link>
-        <router-link v-if="can('leader')" to="/ia">IA</router-link>
-        <router-link v-if="can('leader')" to="/config">Configuração</router-link>
-        <router-link to="/status">Status</router-link>
+        <router-link to="/painel">Resumo</router-link>
+        <router-link to="/painel/farm">Farm</router-link>
+        <router-link v-if="can('manager')" to="/painel/membros">Membros</router-link>
+        <router-link v-if="can('manager')" to="/painel/auditoria">Auditoria</router-link>
+        <router-link v-if="can('manager')" to="/painel/documentos">Documentos</router-link>
+        <router-link v-if="can('leader')" to="/painel/ia">IA</router-link>
+        <router-link v-if="can('leader')" to="/painel/servidor">Servidor</router-link>
+        <router-link v-if="can('leader')" to="/painel/config">Farm e canais</router-link>
+        <router-link to="/painel/status">Status</router-link>
         <router-link to="/servidores">Trocar servidor</router-link>
       </div>
       <div class="side-footer">

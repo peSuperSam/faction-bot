@@ -5,6 +5,7 @@ data/*.sqlite-*
 data/ai-context/
 data/bot.lock
 data/backups/
+data/guilds/
 web/node_modules/
 web/dist/
 *.log

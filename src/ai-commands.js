@@ -21,6 +21,7 @@ const { truncate } = require('./util');
 const { answerQuestion, userFacingAiError, inspectQuestion } = require('./ai');
 const { getAiContextTopic, clearAiContext } = require('./user-context');
 const { reloadKnowledge, listKnowledgeDocuments } = require('./knowledge');
+const { reindexPublishedGuildDocs } = require('./documents');
 const { replyError } = require('./discord-util');
 
 const helpCommand = new SlashCommandBuilder()
@@ -248,7 +249,7 @@ async function handleHelpSources(interaction) {
     return;
   }
   await interaction.reply(
-    ephemeral({ embeds: [sourcesEmbed(listKnowledgeDocuments())] }),
+    ephemeral({ embeds: [sourcesEmbed(listKnowledgeDocuments(interaction.guildId))] }),
   );
 }
 
@@ -261,6 +262,13 @@ async function handleHelpReload(interaction) {
     return;
   }
   const result = reloadKnowledge();
+  if (!result.aborted) {
+    try {
+      reindexPublishedGuildDocs(interaction.guildId);
+    } catch (error) {
+      console.warn('Falha ao reindexar documentos da guilda:', error.message);
+    }
+  }
   if (result.aborted) {
     const detail = result.rejected
       .slice(0, 8)
@@ -306,7 +314,7 @@ async function handleHelpDiagnostico(interaction) {
     userId: interaction.user.id,
     channelId: interaction.channelId,
   });
-  const info = inspectQuestion({ question, prior });
+  const info = inspectQuestion({ question, prior, guildId: interaction.guildId });
   const chunkLines = info.chunks
     .slice(0, 4)
     .map(

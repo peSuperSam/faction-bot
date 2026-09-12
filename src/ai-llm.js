@@ -107,7 +107,8 @@ function userFacingAiError(error) {
     error?.code === 'AI_BUSY' ||
     error?.code === 'AI_TIMEOUT' ||
     error?.code === 'AI_UNAVAILABLE' ||
-    error?.code === 'AI_TOO_LONG'
+    error?.code === 'AI_TOO_LONG' ||
+    error?.code === 'AI_QUOTA'
   ) {
     return error.message;
   }
@@ -182,7 +183,15 @@ async function callOpenRouter(messages, model, apiKey) {
   if (!answer) {
     throw new Error('A OpenRouter retornou uma resposta vazia.');
   }
-  return answer;
+  const usage = payload.usage || {};
+  return {
+    text: answer,
+    model,
+    usage: {
+      inputTokens: Number(usage.prompt_tokens || usage.input_tokens || 0),
+      outputTokens: Number(usage.completion_tokens || usage.output_tokens || 0),
+    },
+  };
 }
 
 async function defaultComplete(messages) {
@@ -193,15 +202,17 @@ async function defaultComplete(messages) {
   }
   const models = listModels();
   let lastError;
+  let retries = 0;
 
   modelLoop: for (const model of models) {
     for (const apiKey of keys) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          const answer = await callOpenRouter(messages, model, apiKey);
-          return answer;
+          const result = await callOpenRouter(messages, model, apiKey);
+          return { ...result, retries };
         } catch (error) {
           lastError = error;
+          retries += 1;
           if (error.status === 404) {
             console.warn(`Modelo indisponível: ${model}`);
             continue modelLoop;
@@ -230,12 +241,24 @@ async function defaultComplete(messages) {
 
 let completeImpl = defaultComplete;
 
+function normalizeCompletion(answer) {
+  if (typeof answer === 'string' || answer == null) {
+    return { text: String(answer || ''), model: null, usage: {}, retries: 0 };
+  }
+  return {
+    text: answer.text || '',
+    model: answer.model || null,
+    usage: answer.usage || {},
+    retries: Number(answer.retries || 0),
+  };
+}
+
 async function complete(messages) {
   assertCircuitClosed();
   try {
     const answer = await completeImpl(messages);
     recordSuccess();
-    return answer;
+    return normalizeCompletion(answer);
   } catch (error) {
     recordFailure();
     throw error;

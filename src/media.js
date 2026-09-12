@@ -9,12 +9,12 @@ const ASSET_DIRS = [
 ];
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 
-function loadCatalog() {
-  return getStructuredCatalog('partnerships');
+function loadCatalog(guildId = null) {
+  return getStructuredCatalog('partnerships', guildId);
 }
 
-function getCatalog() {
-  return loadCatalog();
+function getCatalog(guildId = null) {
+  return loadCatalog(guildId);
 }
 
 function partnershipMarkdown(items = getCatalog()) {
@@ -68,8 +68,8 @@ function listImageFiles(dir) {
   }
 }
 
-function resolveImage(id) {
-  const item = getCatalog().find((entry) => entry.id === id);
+function resolveImage(id, guildId = null) {
+  const item = getCatalog(guildId).find((entry) => entry.id === id);
   const stems = new Set([
     id,
     `mapa-${id}`,
@@ -127,12 +127,12 @@ function matchCatalogIds(haystack, catalog) {
   return ids;
 }
 
-function toCard(id, catalog) {
+function toCard(id, catalog, guildId = null) {
   const item = catalog.find((entry) => entry.id === id);
   if (!item) {
     return null;
   }
-  const filePath = resolveImage(id);
+  const filePath = resolveImage(id, guildId);
   return {
     kind: 'partnership',
     id,
@@ -147,8 +147,8 @@ function toCard(id, catalog) {
   };
 }
 
-function partnershipCards({ question, priorIds } = {}) {
-  const catalog = getCatalog();
+function partnershipCards({ question, priorIds, guildId = null } = {}) {
+  const catalog = getCatalog(guildId);
   const haystack = normalize(question);
   if (!haystack || catalog.length === 0) {
     return [];
@@ -164,7 +164,7 @@ function partnershipCards({ question, priorIds } = {}) {
       continue;
     }
     seen.add(id);
-    const card = toCard(id, catalog);
+    const card = toCard(id, catalog, guildId);
     if (card) {
       cards.push(card);
     }

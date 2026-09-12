@@ -11,6 +11,9 @@ import AiPage from './pages/AiPage.vue';
 import SettingsPage from './pages/SettingsPage.vue';
 import StatusPage from './pages/StatusPage.vue';
 import LandingPage from './pages/LandingPage.vue';
+import DocumentsPage from './pages/DocumentsPage.vue';
+import DocumentEditorPage from './pages/DocumentEditorPage.vue';
+import ServerPage from './pages/ServerPage.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,7 +29,10 @@ const router = createRouter({
         { path: 'farm', component: FarmPage },
         { path: 'membros', component: MembersPage, meta: { min: 'manager' } },
         { path: 'auditoria', component: AuditPage, meta: { min: 'manager' } },
+        { path: 'documentos', component: DocumentsPage, meta: { min: 'manager' } },
+        { path: 'documentos/:id', component: DocumentEditorPage, meta: { min: 'manager' } },
         { path: 'ia', component: AiPage, meta: { min: 'leader' } },
+        { path: 'servidor', component: ServerPage, meta: { min: 'leader' } },
         { path: 'config', component: SettingsPage, meta: { min: 'leader' } },
         { path: 'status', component: StatusPage },
       ],

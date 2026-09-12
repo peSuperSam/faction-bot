@@ -33,8 +33,6 @@ const {
   listGoals,
   insertAuditEvent,
   withTransaction,
-  envRoleId,
-  ROLE_ENV,
 } = require('./db');
 const {
   requireLeader,
@@ -791,14 +789,6 @@ async function handleConfig(interaction, key) {
     return;
   }
   const role = interaction.options.getRole('cargo', true);
-  const envName = ROLE_ENV[key];
-  if (envName && envRoleId(envName)) {
-    await replyError(
-      interaction,
-      `Este cargo vem do .env (${envName}). Altere o ID lá e reinicie o bot.`,
-    );
-    return;
-  }
   setSetting(interaction.guildId, key, role.id);
   const permResult = await syncAdminChannelPermissions(
     interaction.client,

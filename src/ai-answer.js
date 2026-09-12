@@ -33,9 +33,16 @@ const {
   isActionFilterQuestion,
   isNamedActionQuestion,
 } = require('./facts');
+const { BOT_NAME } = require('./brand');
+const {
+  newRequestId,
+  reserveUsage,
+  commitUsage,
+  rollbackUsage,
+} = require('./ai-entitlement');
 const llm = require('./ai-llm');
 
-const SYSTEM_PROMPT = `Você é o Coroa, assistente oficial de regras de uma facção de GTA RP.
+const SYSTEM_PROMPT = `Você é o ${BOT_NAME}, assistente oficial de regras de uma facção de GTA RP.
 Responda em português brasileiro, de forma direta, objetiva e respeitosa.
 Use exclusivamente os TRECHOS OFICIAIS enviados nesta conversa.
 
@@ -51,8 +58,8 @@ Como responder:
 - Se a pergunta for de parceria (Iraque, Galaxy, Alaska, Seita, munição, lavagem, contrabando, hospital ilegal), use o trecho de parcerias.
 - Não cite arquivo, pasta, seção nem fontes.`;
 
-const SYSTEM_PROMPT_CHAT = `Você é o Coroa, assistente da facção no Discord. Fale em português brasileiro, próximo e direto, como alguém da casa — sem gíria forçada e sem erro técnico.
-Você se chama Coroa. Se perguntarem seu nome, como te chamar ou quem você é: responda em 1 frase, no tom da casa. Não cite regras, arquivos, fontes nem embeds.
+const SYSTEM_PROMPT_CHAT = `Você é o ${BOT_NAME}, assistente da facção no Discord. Fale em português brasileiro, próximo e direto, como alguém da casa — sem gíria forçada e sem erro técnico.
+Você se chama ${BOT_NAME}. Se perguntarem seu nome, como te chamar ou quem você é: responda em 1 frase, no tom da casa. Não cite regras, arquivos, fontes nem embeds.
 Se for saudação ou papo solto ("bora", "e agora", "pra onde"): 1 ou 2 frases curtas. Convide a mandar a dúvida (regra, preço, RP). Não invente missão nem roleplay longo.
 Se for dúvida de regra, preço/tabela ou parceria (Iraque, Galaxy, Alaska, Seita, munição, lavagem, hospital ilegal, mapa, horário): use só os TRECHOS OFICIAIS. Diga o valor com e sem parceria quando o trecho tiver os dois. Não invente preço.
 Se a pergunta continuar o mesmo assunto ("essa regra", "e o de parceria", "e a capsula", "e o mapa", "e o horario"), NÃO troque de tema e NÃO peça outro trecho.
@@ -206,12 +213,12 @@ async function answerQuestion({
 }) {
   const started = Date.now();
   assertQuestionSize(question);
-  noteAiRequest(userId);
-  const documents = listKnowledgeDocuments();
+  noteAiRequest(userId, guildId);
+  const documents = listKnowledgeDocuments(guildId);
   const prior = getLastRule(channelId, userId, guildId);
-  const parsed = parseQuestion(question, prior);
+  const parsed = parseQuestion(question, prior, guildId);
   const topics = extractTopicTerms(question);
-  const themeNow = parsed.theme || questionTheme(question);
+  const themeNow = parsed.theme || questionTheme(question, guildId);
   const themeChanged = Boolean(
     themeNow && prior?.theme && themeNow !== prior.theme,
   );
@@ -222,7 +229,7 @@ async function answerQuestion({
     !themeChanged &&
     parsed.intent !== 'clarify';
   const activePrior = followUp ? prior : null;
-  const wantsKnowledge = looksLikeRuleQuestion(question, activePrior || prior);
+  const wantsKnowledge = looksLikeRuleQuestion(question, activePrior || prior, guildId);
   const casual =
     conversational && (isCasualMessage(question) || (!wantsKnowledge && !followUp));
   const ruleQuestion = !conversational || (!casual && wantsKnowledge);
@@ -242,8 +249,8 @@ async function answerQuestion({
       isContingenteQuestion(question) ||
       isActionListQuestion(question) ||
       isActionFilterQuestion(question) ||
-      isNamedActionQuestion(question));
-  let chunks = shouldSearch ? searchRules(searchQuery, followUp ? 4 : 3) : [];
+      isNamedActionQuestion(question, guildId));
+  let chunks = shouldSearch ? searchRules(searchQuery, followUp ? 4 : 3, guildId) : [];
   if (isWeakSearch(chunks, themeNow)) {
     if (
       followUp &&
@@ -263,6 +270,7 @@ async function answerQuestion({
       question,
       prior: activePrior,
       followUp,
+      guildId,
     });
     if (structured) {
       const answer = formatStructuredAnswer(structured);
@@ -335,7 +343,7 @@ async function answerQuestion({
     console.warn('IA sem trechos', {
       question,
       documents: documents.length,
-      chunks: countKnowledgeChunks(),
+      chunks: countKnowledgeChunks(guildId),
     });
     const answer = notFoundAnswer(question);
     logOutcome({
@@ -406,10 +414,17 @@ async function answerQuestion({
   const followUpHint = followUp
     ? `\nAssunto em discussão: ${topic}. Esta mensagem continua o mesmo tema (${truncate(activePrior?.query || topic, 120)}). Responda o que foi perguntado agora com os TRECHOS OFICIAIS. Se pedirem o contrário (maior/menor, com/sem, outro item), use o trecho correspondente — não repita só a resposta anterior.\nSe perguntarem por que seguir, use definição, ressalva e consequência prática que estiverem nos trechos.`
     : `\nEsta é uma pergunta NOVA. Ignore o histórico e qualquer assunto anterior. Responda só com os TRECHOS OFICIAIS abaixo. Não fale de parcerias, mapas, Iraque, Galaxy, Alaska ou Seita se a pergunta não for sobre isso.`;
-  const release = acquireAiSlot(userId);
-  let rawAnswer;
+  const requestId = newRequestId();
+  const release = acquireAiSlot(userId, guildId);
+  let completion = { text: '', model: null, usage: {}, retries: 0 };
   try {
-    rawAnswer = await llm.complete([
+    reserveUsage({
+      guildId,
+      userId,
+      operation: conversational ? 'chat' : 'question',
+      requestId,
+    });
+    completion = await llm.complete([
       {
         role: 'system',
         content: conversational ? SYSTEM_PROMPT_CHAT : SYSTEM_PROMPT,
@@ -419,15 +434,43 @@ async function answerQuestion({
         role: 'user',
         content: conversational
           ? casual
-            ? `Mensagem do membro:\n${truncate(question, 500)}\n\nResponda só como conversa curta, no tom do Coroa. Não cite regras, arquivos nem fontes.`
+            ? `Mensagem do membro:\n${truncate(question, 500)}\n\nResponda só como conversa curta, no tom do ${BOT_NAME}. Não cite regras, arquivos nem fontes.`
             : `Mensagem do membro:\n${truncate(question, 500)}\n${followUpHint}\nTRECHOS OFICIAIS:\n${truncate(context, 6000)}\n\nSe os trechos definirem o termo, responda com definição e exceções. Não diga que falta informação. Não cite arquivo, pasta nem fontes.`
           : `Pergunta do membro:\n${truncate(question, 500)}\n\nResponda com o que estiver nos trechos abaixo. Se algum trecho definir o termo perguntado, essa é a resposta — definição e exceções juntas. Não diga que está incompleto. Não cite arquivo, pasta nem fontes.\n\nTRECHOS OFICIAIS:\n${truncate(context, 6000)}`,
       },
     ]);
+    commitUsage({
+      requestId,
+      guildId,
+      userId,
+      operation: conversational ? 'chat' : 'question',
+      model: completion.model,
+      inputTokens: completion.usage?.inputTokens,
+      outputTokens: completion.usage?.outputTokens,
+      retries: completion.retries,
+      latencyMs: latency(),
+      estimatedCost: Number(
+        (
+          (Number(completion.usage?.inputTokens || 0) * 0.14 +
+            Number(completion.usage?.outputTokens || 0) * 0.28) /
+          1_000_000
+        ).toFixed(6),
+      ),
+    });
+  } catch (error) {
+    rollbackUsage({
+      requestId,
+      guildId,
+      userId,
+      operation: conversational ? 'chat' : 'question',
+      status: error.code === 'AI_QUOTA' ? 'denied' : 'error',
+    });
+    throw error;
   } finally {
     release();
   }
 
+  const rawAnswer = completion.text;
   const validated = validateGeneratedAnswer(rawAnswer, { chunks, casual });
   const answer = validated.ok
     ? validated.answer

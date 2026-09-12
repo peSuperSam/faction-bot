@@ -1,7 +1,10 @@
 function validateStartupEnv() {
-  const required = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID', 'DISCORD_GUILD_ID'];
+  const required = ['DISCORD_TOKEN', 'DISCORD_CLIENT_ID'];
   const missing = required.filter((name) => !String(process.env[name] || '').trim());
   const warnings = [];
+  if (!String(process.env.DISCORD_GUILD_ID || '').trim()) {
+    warnings.push('DISCORD_GUILD_ID vazio: o bot descobre as guildas após o login.');
+  }
   if (!String(process.env.AI_API_KEY || process.env.AI_API_KEYS || '').trim()) {
     warnings.push('AI_API_KEY vazia: o chat de regras não vai responder até configurar a OpenRouter.');
   }

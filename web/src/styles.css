@@ -151,7 +151,7 @@ nav.side a {
   padding: 8px 10px;
   border-left: 2px solid transparent;
 }
-nav.side a.router-link-active {
+nav.side a.router-link-exact-active {
   color: var(--gold);
   border-left-color: var(--gold);
   background: rgba(232, 196, 138, 0.06);
@@ -294,6 +294,44 @@ input, select, textarea {
   border: 1px solid var(--line);
   padding: 9px 10px;
   width: 100%;
+}
+textarea.doc-editor {
+  min-height: 360px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.split-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.doc-preview {
+  min-height: 360px;
+  white-space: pre-wrap;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow: auto;
+}
+.quota-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.quota-card {
+  border: 1px solid var(--line);
+  padding: 12px;
+}
+.quota-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.quota-card strong {
+  font-size: 22px;
 }
 .banner {
   padding: 10px 12px;
@@ -442,6 +480,8 @@ button.server-pick:hover:not(:disabled) {
   .main { padding: 20px 16px 40px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .dashboard-columns { grid-template-columns: 1fr; }
+  .split-editor { grid-template-columns: 1fr; }
+  .quota-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .side-footer { display: flex; border-top: 0; padding-top: 0; }
   .landing-hero { grid-template-columns: 1fr; padding-top: 60px; }
   .hero-visual { max-width: 680px; width: 100%; margin: 0 auto; }

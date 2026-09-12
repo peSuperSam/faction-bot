@@ -22,15 +22,15 @@
           <span>Canal da IA</span>
           <input v-model="form.ai_channel_id" />
         </label>
-        <label class="field" v-if="!formLocked.leader">
+        <label class="field">
           <span>Cargo de líder</span>
           <input v-model="form.leader_role_id" />
         </label>
-        <label class="field" v-if="!formLocked.manager">
+        <label class="field">
           <span>Cargo de gerente</span>
           <input v-model="form.manager_role_id" />
         </label>
-        <label class="field" v-if="!formLocked.member">
+        <label class="field">
           <span>Cargo de membro</span>
           <input v-model="form.member_role_id" />
         </label>
@@ -84,7 +84,7 @@ const message = ref('');
 const ok = ref(false);
 const newMaterial = ref('');
 const channelId = ref('');
-const formLocked = reactive({ leader: true, manager: true, member: true });
+const formLocked = reactive({ leader: false, manager: false, member: false });
 const form = reactive({
   log_channel_id: '',
   admin_channel_id: '',

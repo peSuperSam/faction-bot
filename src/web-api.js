@@ -1,6 +1,6 @@
 const http = require('node:http');
 const { URL } = require('node:url');
-const { getSettings } = require('./db');
+const { getSettings, upsertUser, upsertGuildMember, upsertGuild } = require('./db');
 const { verifySession } = require('./web-session');
 const {
   resolveAccess,
@@ -51,7 +51,7 @@ function parseBody(req) {
     let size = 0;
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > 64_000) {
+      if (size > 320_000) {
         reject(new HttpError(413, 'Payload grande demais.'));
         req.destroy();
         return;
@@ -182,10 +182,26 @@ async function authenticate(req, url, discord) {
       'Apenas administradores deste servidor podem usar o painel.',
     );
   }
+  const tag = session?.tag || member?.user?.global_name || member?.user?.username || userId;
+  try {
+    upsertUser(userId, tag);
+    upsertGuildMember({ guildId, userId, tag, status: 'active' });
+    if (guild?.id) {
+      upsertGuild({
+        id: guild.id,
+        name: guild.name,
+        icon: guild.icon,
+        ownerId: guild.owner_id || guild.ownerId,
+        memberCount: guild.approximate_member_count || guild.memberCount,
+      });
+    }
+  } catch {
+    // auditoria incremental não deve derrubar o painel
+  }
   return {
     ...base,
     guildId,
-    tag: session?.tag || member?.user?.global_name || member?.user?.username || userId,
+    tag,
     access,
     guild,
   };
@@ -362,6 +378,108 @@ async function dispatch(req, url, auth, discord) {
   if (method === 'POST' && pathname === '/v1/backup') {
     assertRole(access, 'leader');
     return services.runBackup(guildId, actor);
+  }
+
+  if (method === 'GET' && pathname === '/v1/guild') {
+    assertRole(access, 'member');
+    return services.getGuildPage(guildId);
+  }
+
+  if (method === 'POST' && pathname === '/v1/guild/refresh') {
+    assertRole(access, 'leader');
+    return services.refreshGuild(guildId, actor, discord);
+  }
+
+  if (method === 'PATCH' && pathname === '/v1/guild') {
+    assertRole(access, 'leader');
+    const body = await parseBody(req);
+    return services.updateGuildIdentity(guildId, actor, body || {});
+  }
+
+  if (method === 'GET' && pathname === '/v1/documents') {
+    assertRole(access, 'manager');
+    return services.listGuildDocuments(guildId, {
+      status: url.searchParams.get('status') || null,
+    });
+  }
+
+  if (method === 'POST' && pathname === '/v1/documents') {
+    assertRole(access, 'leader');
+    const body = await parseBody(req);
+    return services.createGuildDocument(guildId, actor, body || {});
+  }
+
+  if (method === 'POST' && pathname === '/v1/documents/validate') {
+    assertRole(access, 'manager');
+    const body = await parseBody(req);
+    return services.validateGuildDocuments(guildId, body?.documentIds);
+  }
+
+  if (method === 'POST' && pathname === '/v1/documents/publish') {
+    assertRole(access, 'leader');
+    const body = await parseBody(req);
+    return services.publishGuildDocuments(guildId, actor, body || {});
+  }
+
+  const restoreMatch = pathname.match(/^\/v1\/documents\/(\d+)\/restore$/);
+  if (method === 'POST' && restoreMatch) {
+    assertRole(access, 'leader');
+    const body = await parseBody(req);
+    return services.restoreDocumentVersion(
+      guildId,
+      actor,
+      Number(restoreMatch[1]),
+      body?.versionNumber,
+    );
+  }
+
+  const versionsMatch = pathname.match(/^\/v1\/documents\/(\d+)\/versions$/);
+  if (method === 'GET' && versionsMatch) {
+    assertRole(access, 'manager');
+    return services.listDocumentVersions(guildId, Number(versionsMatch[1]));
+  }
+
+  const documentMatch = pathname.match(/^\/v1\/documents\/(\d+)$/);
+  if (documentMatch && method === 'GET') {
+    assertRole(access, 'manager');
+    return services.getGuildDocument(guildId, Number(documentMatch[1]));
+  }
+  if (documentMatch && method === 'PATCH') {
+    assertRole(access, 'leader');
+    const body = await parseBody(req);
+    return services.updateGuildDocument(guildId, actor, Number(documentMatch[1]), body || {});
+  }
+
+  if (method === 'GET' && pathname === '/v1/releases') {
+    assertRole(access, 'manager');
+    return services.listGuildReleases(guildId);
+  }
+
+  const rollbackMatch = pathname.match(/^\/v1\/releases\/(\d+)\/rollback$/);
+  if (method === 'POST' && rollbackMatch) {
+    assertRole(access, 'leader');
+    return services.rollbackGuildRelease(guildId, actor, Number(rollbackMatch[1]));
+  }
+
+  if (method === 'GET' && pathname === '/v1/catalogs') {
+    assertRole(access, 'manager');
+    return services.getGuildCatalogs(guildId);
+  }
+
+  if (method === 'POST' && pathname === '/v1/catalogs/import') {
+    assertRole(access, 'leader');
+    const body = await parseBody(req);
+    return services.importGuildCatalog(guildId, actor, body?.kind, body?.items);
+  }
+
+  if (method === 'GET' && pathname === '/v1/ai/entitlements') {
+    assertRole(access, 'leader');
+    return services.getAiEntitlements(guildId);
+  }
+
+  if (method === 'GET' && pathname === '/v1/ai/usage') {
+    assertRole(access, 'leader');
+    return services.getAiUsage(guildId);
   }
 
   throw new HttpError(404, 'Rota não encontrada.');

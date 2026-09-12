@@ -41,15 +41,15 @@ function hasAlias(haystack, alias) {
   return new RegExp(`(^|[^a-z0-9])${needle}([^a-z0-9]|$)`).test(haystack);
 }
 
-function priceItems() {
-  return getCatalog('prices');
+function priceItems(guildId = null) {
+  return getCatalog('prices', guildId);
 }
 
 function isPricePartnership(haystack) {
   return /\b(com|sem) parceria\b/.test(normalize(haystack));
 }
 
-function isPriceQuestion(text) {
+function isPriceQuestion(text, guildId = null) {
   const haystack = normalize(text);
   if (!haystack) {
     return false;
@@ -64,7 +64,7 @@ function isPriceQuestion(text) {
   ) {
     return true;
   }
-  return priceItems().some((item) =>
+  return priceItems(guildId).some((item) =>
     item.aliases.some((alias) => hasAlias(haystack, alias)),
   );
 }
@@ -171,12 +171,12 @@ function formatPriceCard(item) {
   return lines.join('\n');
 }
 
-function priceCards({ question, priorIds } = {}) {
+function priceCards({ question, priorIds, guildId = null } = {}) {
   const haystack = normalize(question);
   if (!haystack) {
     return [];
   }
-  const hits = priceItems().filter((item) =>
+  const hits = priceItems(guildId).filter((item) =>
     item.aliases.some((alias) => hasAlias(haystack, alias)),
   );
   const reusePrior =
@@ -187,7 +187,7 @@ function priceCards({ question, priorIds } = {}) {
     hits.length > 0
       ? hits
       : reusePrior
-        ? priceItems().filter((item) => priorIds.includes(item.id))
+        ? priceItems(guildId).filter((item) => priorIds.includes(item.id))
         : [];
   return selected.map((item) => ({
     kind: 'price',
@@ -257,12 +257,12 @@ function reloadActionCatalog() {
   return loadActionCatalog();
 }
 
-function loadActionCatalog() {
-  return getCatalog('actions');
+function loadActionCatalog(guildId = null) {
+  return getCatalog('actions', guildId);
 }
 
-function listedActions() {
-  return loadActionCatalog().filter((entry) => entry.list !== false);
+function listedActions(guildId = null) {
+  return loadActionCatalog(guildId).filter((entry) => entry.list !== false);
 }
 
 function matchesBanditCount(entry, count) {
@@ -322,11 +322,11 @@ function formatActionListCard(entries, title) {
   return lines.join('\n');
 }
 
-function actionListCards({ question } = {}) {
+function actionListCards({ question, guildId = null } = {}) {
   if (!isActionListQuestion(question)) {
     return [];
   }
-  const entries = listedActions();
+  const entries = listedActions(guildId);
   return [
     {
       kind: 'action',
@@ -337,7 +337,7 @@ function actionListCards({ question } = {}) {
   ];
 }
 
-function actionFilterCards({ question } = {}) {
+function actionFilterCards({ question, guildId = null } = {}) {
   const haystack = normalize(question);
   if (!haystack) {
     return [];
@@ -347,7 +347,7 @@ function actionFilterCards({ question } = {}) {
   if (count == null && !weapon) {
     return [];
   }
-  let entries = listedActions();
+  let entries = listedActions(guildId);
   if (count != null) {
     entries = entries.filter((entry) => matchesBanditCount(entry, count));
   }
@@ -373,21 +373,21 @@ function actionFilterCards({ question } = {}) {
   ];
 }
 
-function actionNameHits(question) {
+function actionNameHits(question, guildId = null) {
   const haystack = normalize(question);
   if (!haystack) {
     return [];
   }
-  return loadActionCatalog().filter((entry) =>
+  return loadActionCatalog(guildId).filter((entry) =>
     (entry.aliases || []).some((alias) => hasAlias(haystack, alias)),
   );
 }
 
-function isNamedActionQuestion(text) {
-  return actionNameHits(text).length > 0;
+function isNamedActionQuestion(text, guildId = null) {
+  return actionNameHits(text, guildId).length > 0;
 }
 
-function actionDetailCards({ question } = {}) {
+function actionDetailCards({ question, guildId = null } = {}) {
   const haystack = normalize(question);
   if (!haystack) {
     return [];
@@ -398,7 +398,7 @@ function actionDetailCards({ question } = {}) {
   if (isContingenteQuestion(haystack) && (wantsMenor(haystack) || wantsMaior(haystack))) {
     return [];
   }
-  let hits = actionNameHits(haystack);
+  let hits = actionNameHits(haystack, guildId);
   if (hits.length === 0) {
     return [];
   }

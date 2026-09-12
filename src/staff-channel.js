@@ -82,7 +82,7 @@ async function applyAdminChannelPermissions(channel, settings) {
 
   if (!settings.leader_role_id && !settings.manager_role_id) {
     notes.push(
-      'Defina ROLE_LEADER_ID e ROLE_MANAGER_ID no .env para o Coroa liberar esses cargos neste canal.',
+      'Defina os cargos de líder e gerente nas configurações do servidor para o Coroa liberar esses cargos neste canal.',
     );
   }
 

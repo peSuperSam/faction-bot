@@ -164,6 +164,174 @@ function migrate() {
       updated_at TEXT NOT NULL,
       details TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS guilds (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      icon TEXT,
+      owner_id TEXT,
+      member_count INTEGER,
+      status TEXT NOT NULL DEFAULT 'active',
+      joined_at TEXT,
+      left_at TEXT,
+      fetched_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      tag TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_members (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      tag TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (guild_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      current_published_version_id INTEGER,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (guild_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_document_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      guild_id TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_by TEXT,
+      change_message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      published_at TEXT,
+      FOREIGN KEY (document_id) REFERENCES guild_documents(id) ON DELETE CASCADE,
+      UNIQUE (document_id, version_number)
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_releases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      release_number INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'published',
+      created_by TEXT,
+      message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      published_at TEXT,
+      UNIQUE (guild_id, release_number)
+    );
+
+    CREATE TABLE IF NOT EXISTS knowledge_release_documents (
+      release_id INTEGER NOT NULL,
+      document_id INTEGER NOT NULL,
+      version_id INTEGER NOT NULL,
+      PRIMARY KEY (release_id, document_id),
+      FOREIGN KEY (release_id) REFERENCES knowledge_releases(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS guild_catalogs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      payload_json TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (guild_id, kind)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_entitlements (
+      guild_id TEXT PRIMARY KEY,
+      plan TEXT NOT NULL DEFAULT 'internal',
+      status TEXT NOT NULL DEFAULT 'active',
+      monthly_limit INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'manual',
+      starts_at TEXT,
+      ends_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_usage_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id TEXT NOT NULL UNIQUE,
+      guild_id TEXT NOT NULL,
+      user_id TEXT,
+      operation TEXT,
+      provider TEXT,
+      model TEXT,
+      status TEXT NOT NULL,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      estimated_cost REAL,
+      latency_ms INTEGER,
+      retries INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_usage_daily (
+      guild_id TEXT NOT NULL,
+      day TEXT NOT NULL,
+      requests INTEGER NOT NULL DEFAULT 0,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      estimated_cost REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (guild_id, day)
+    );
+
+    CREATE TABLE IF NOT EXISTS billing_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL UNIQUE,
+      email TEXT,
+      provider TEXT,
+      external_customer_id TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS billing_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      account_id INTEGER,
+      plan TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'incomplete',
+      provider TEXT,
+      external_subscription_id TEXT UNIQUE,
+      period_start TEXT,
+      period_end TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS billing_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider TEXT NOT NULL,
+      external_event_id TEXT NOT NULL,
+      event_type TEXT,
+      payload_hash TEXT,
+      processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (provider, external_event_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_guild_documents_guild
+      ON guild_documents (guild_id, status);
+    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_guild
+      ON ai_usage_events (guild_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_guild
+      ON billing_subscriptions (guild_id, status);
   `);
 
   addColumnIfMissing('farm_entries', 'status', "TEXT NOT NULL DEFAULT 'approved'");
@@ -189,24 +357,98 @@ function migrate() {
       ON audit_events (guild_id, created_at DESC);
   `);
 
+  addColumnIfMissing('guild_settings', 'setup_status', "TEXT NOT NULL DEFAULT 'pending'");
+  addColumnIfMissing('guild_settings', 'identity_name', 'TEXT');
+  addColumnIfMissing('guild_settings', 'presence_text', 'TEXT');
+  addColumnIfMissing('ai_logs', 'request_id', 'TEXT');
+  migrateKnowledgeGuildScope();
+}
+
+function migrateKnowledgeGuildScope() {
+  const cols = tableColumns('knowledge_documents');
+  let rebuiltDocs = false;
+  if (!cols.includes('guild_id')) {
+    db.exec(`
+      CREATE TABLE knowledge_documents_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL DEFAULT '__global__',
+        scope TEXT NOT NULL DEFAULT 'global',
+        source_type TEXT NOT NULL DEFAULT 'file',
+        version_id TEXT,
+        name TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1,
+        hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        indexed_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (guild_id, name)
+      );
+      INSERT INTO knowledge_documents_new
+        (id, guild_id, scope, source_type, name, version, hash, status, indexed_at)
+      SELECT id, '__global__', 'global', 'file', name, version, hash, status, indexed_at
+      FROM knowledge_documents;
+      DROP TABLE knowledge_documents;
+      ALTER TABLE knowledge_documents_new RENAME TO knowledge_documents;
+    `);
+    rebuiltDocs = true;
+  }
+  addColumnIfMissing('knowledge_chunks', 'guild_id', "TEXT NOT NULL DEFAULT '__global__'");
+  if (rebuiltDocs || !knowledgeFtsHasGuildColumn()) {
+    rebuildKnowledgeFts({ reindex: true });
+  }
+}
+
+function knowledgeFtsHasGuildColumn() {
+  try {
+    db.prepare(`SELECT guild_id FROM knowledge_fts LIMIT 1`).get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rebuildKnowledgeFts({ reindex = false } = {}) {
+  if (knowledgeFtsHasGuildColumn() && !reindex) {
+    return;
+  }
+  db.exec(`DROP TABLE IF EXISTS knowledge_fts`);
   try {
     db.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
+      CREATE VIRTUAL TABLE knowledge_fts USING fts5(
         document_name,
         section,
         content,
+        guild_id UNINDEXED,
         tokenize = 'unicode61 remove_diacritics 2'
       );
     `);
   } catch {
     db.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
+      CREATE VIRTUAL TABLE knowledge_fts USING fts5(
         document_name,
         section,
-        content
+        content,
+        guild_id UNINDEXED
       );
     `);
   }
+  const rows = db
+    .prepare(
+      `
+      SELECT d.name AS document_name, d.guild_id, c.section, c.content
+      FROM knowledge_chunks c
+      JOIN knowledge_documents d ON d.id = c.document_id
+    `,
+    )
+    .all();
+  const insert = db.prepare(
+    `INSERT INTO knowledge_fts (document_name, section, content, guild_id) VALUES (?, ?, ?, ?)`,
+  );
+  const tx = db.transaction((items) => {
+    for (const row of items) {
+      insert.run(row.document_name, row.section, row.content, row.guild_id || '__global__');
+    }
+  });
+  tx(rows);
 }
 
 migrate();
@@ -280,7 +522,7 @@ function getSettings(guildId) {
   const row = db
     .prepare(`SELECT * FROM guild_settings WHERE guild_id = ?`)
     .get(guildId);
-  const base =
+  return (
     row || {
       guild_id: guildId,
       leader_role_id: null,
@@ -292,13 +534,25 @@ function getSettings(guildId) {
       farm_channel_id: null,
       farm_panel_message_id: null,
       auto_approve: 1,
-    };
-  return {
-    ...base,
-    leader_role_id: envRoleId('ROLE_LEADER_ID') || base.leader_role_id || null,
-    manager_role_id: envRoleId('ROLE_MANAGER_ID') || base.manager_role_id || null,
-    member_role_id: envRoleId('ROLE_MEMBER_ID') || base.member_role_id || null,
-  };
+      setup_status: 'pending',
+      identity_name: null,
+      presence_text: null,
+    }
+  );
+}
+
+function bootstrapEnvRolesIfNeeded(guildId) {
+  const envGuild = String(process.env.DISCORD_GUILD_ID || '').trim();
+  if (!envGuild || String(guildId) !== envGuild) {
+    return getSettings(guildId);
+  }
+  const row = db
+    .prepare(`SELECT * FROM guild_settings WHERE guild_id = ?`)
+    .get(guildId);
+  if (row?.leader_role_id || row?.manager_role_id || row?.member_role_id) {
+    return getSettings(guildId);
+  }
+  return syncEnvRoleSettings(guildId);
 }
 
 function syncEnvRoleSettings(guildId) {
@@ -321,6 +575,9 @@ const SETTING_KEYS = new Set([
   'farm_channel_id',
   'farm_panel_message_id',
   'auto_approve',
+  'setup_status',
+  'identity_name',
+  'presence_text',
 ]);
 
 function setSetting(guildId, key, value) {
@@ -724,42 +981,54 @@ function listGoals(guildId, periodId) {
     .all(guildId, periodId);
 }
 
-function replaceKnowledge(documents) {
+function replaceKnowledge(documents, { guildId = '__global__', scope = 'global' } = {}) {
   const insertDocument = db.prepare(
     `
-    INSERT INTO knowledge_documents (name, version, hash, status, indexed_at)
-    VALUES (@name, @version, @hash, 'active', datetime('now'))
+    INSERT INTO knowledge_documents
+      (guild_id, scope, source_type, version_id, name, version, hash, status, indexed_at)
+    VALUES
+      (@guildId, @scope, @sourceType, @versionId, @name, @version, @hash, 'active', datetime('now'))
   `,
   );
   const insertChunk = db.prepare(
     `
-    INSERT INTO knowledge_chunks (document_id, section, content, chunk_index)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO knowledge_chunks (document_id, section, content, chunk_index, guild_id)
+    VALUES (?, ?, ?, ?, ?)
   `,
   );
   const insertFts = db.prepare(
     `
-    INSERT INTO knowledge_fts (document_name, section, content)
-    VALUES (?, ?, ?)
+    INSERT INTO knowledge_fts (document_name, section, content, guild_id)
+    VALUES (?, ?, ?, ?)
   `,
   );
 
   const tx = db.transaction((docs) => {
-    db.exec(`
-      DELETE FROM knowledge_fts;
-      DELETE FROM knowledge_chunks;
-      DELETE FROM knowledge_documents;
-    `);
+    const existing = db
+      .prepare(`SELECT id FROM knowledge_documents WHERE guild_id = ?`)
+      .all(guildId)
+      .map((row) => row.id);
+    if (existing.length) {
+      db.prepare(
+        `DELETE FROM knowledge_chunks WHERE document_id IN (${existing.map(() => '?').join(',')})`,
+      ).run(...existing);
+    }
+    db.prepare(`DELETE FROM knowledge_documents WHERE guild_id = ?`).run(guildId);
+    db.prepare(`DELETE FROM knowledge_fts WHERE guild_id = ?`).run(guildId);
     for (const document of docs) {
       const result = insertDocument.run({
+        guildId,
+        scope,
+        sourceType: document.sourceType || (scope === 'global' ? 'file' : 'guild'),
+        versionId: document.versionId || null,
         name: document.name,
         version: document.version,
         hash: document.hash,
       });
       const documentId = Number(result.lastInsertRowid);
       document.chunks.forEach((chunk, index) => {
-        insertChunk.run(documentId, chunk.section, chunk.content, index);
-        insertFts.run(document.name, chunk.section, chunk.content);
+        insertChunk.run(documentId, chunk.section, chunk.content, index, guildId);
+        insertFts.run(document.name, chunk.section, chunk.content, guildId);
       });
     }
   });
@@ -767,24 +1036,34 @@ function replaceKnowledge(documents) {
   tx(documents);
 }
 
-function searchKnowledge(query, limit = 5) {
+function knowledgeGuildFilter(guildId) {
+  if (!guildId || guildId === '__global__') {
+    return { sql: `guild_id = '__global__'`, params: [] };
+  }
+  return { sql: `guild_id IN ('__global__', ?)`, params: [String(guildId)] };
+}
+
+function searchKnowledge(query, limit = 5, guildId = null) {
+  const filter = knowledgeGuildFilter(guildId);
   return db
     .prepare(
       `
-      SELECT document_name, section, content, rank
+      SELECT document_name, section, content, rank, guild_id
       FROM knowledge_fts
       WHERE knowledge_fts MATCH ?
+        AND ${filter.sql}
       ORDER BY rank
       LIMIT ?
     `,
     )
-    .all(query, limit);
+    .all(query, ...filter.params, limit);
 }
 
-function searchKnowledgeLike(tokens, limit = 20) {
+function searchKnowledgeLike(tokens, limit = 20, guildId = null) {
   if (!tokens.length) {
     return [];
   }
+  const filter = knowledgeGuildFilter(guildId);
   const clauses = tokens.map(
     () =>
       `(lower(d.name) LIKE ? OR lower(c.section) LIKE ? OR lower(c.content) LIKE ?)`,
@@ -794,50 +1073,59 @@ function searchKnowledgeLike(tokens, limit = 20) {
     const like = `%${token.replace(/[%_]/g, '')}%`;
     params.push(like, like, like);
   }
+  params.push(...filter.params);
   params.push(limit);
   return db
     .prepare(
       `
-      SELECT d.name AS document_name, c.section, c.content, 0 AS rank
+      SELECT d.name AS document_name, c.section, c.content, 0 AS rank, d.guild_id
       FROM knowledge_chunks c
       JOIN knowledge_documents d ON d.id = c.document_id
-      WHERE ${clauses.join(' OR ')}
+      WHERE (${clauses.join(' OR ')})
+        AND d.${filter.sql}
       LIMIT ?
     `,
     )
     .all(...params);
 }
 
-function listChunksBySection(documentName, section) {
+function listChunksBySection(documentName, section, guildId = null) {
+  const filter = knowledgeGuildFilter(guildId);
   return db
     .prepare(
       `
-      SELECT d.name AS document_name, c.section, c.content, c.chunk_index
+      SELECT d.name AS document_name, c.section, c.content, c.chunk_index, d.guild_id
       FROM knowledge_chunks c
       JOIN knowledge_documents d ON d.id = c.document_id
       WHERE d.name = ? AND c.section = ?
+        AND d.${filter.sql}
       ORDER BY c.chunk_index ASC
     `,
     )
-    .all(documentName, section);
+    .all(documentName, section, ...filter.params);
 }
 
-function countKnowledgeChunks() {
-  const row = db.prepare(`SELECT COUNT(*) AS total FROM knowledge_chunks`).get();
+function countKnowledgeChunks(guildId = null) {
+  const filter = knowledgeGuildFilter(guildId);
+  const row = db
+    .prepare(`SELECT COUNT(*) AS total FROM knowledge_chunks WHERE ${filter.sql}`)
+    .get(...filter.params);
   return Number(row?.total || 0);
 }
 
-function listKnowledgeDocuments() {
+function listKnowledgeDocuments(guildId = null) {
+  const filter = knowledgeGuildFilter(guildId);
   return db
     .prepare(
       `
-      SELECT name, version, hash, status, indexed_at,
+      SELECT name, version, hash, status, indexed_at, guild_id, scope,
         (SELECT COUNT(*) FROM knowledge_chunks c WHERE c.document_id = d.id) AS chunks
       FROM knowledge_documents d
-      ORDER BY name ASC
+      WHERE ${filter.sql}
+      ORDER BY scope ASC, name ASC
     `,
     )
-    .all();
+    .all(...filter.params);
 }
 
 function logAi({
@@ -1240,6 +1528,246 @@ function setAiUserTopic({ guildId, userId, topic, query, chunks }) {
   );
 }
 
+function upsertGuild(row) {
+  db.prepare(
+    `
+    INSERT INTO guilds (id, name, icon, owner_id, member_count, status, joined_at, fetched_at, updated_at)
+    VALUES (@id, @name, @icon, @ownerId, @memberCount, 'active', datetime('now'), datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      icon = excluded.icon,
+      owner_id = excluded.owner_id,
+      member_count = excluded.member_count,
+      status = 'active',
+      left_at = NULL,
+      fetched_at = excluded.fetched_at,
+      updated_at = datetime('now')
+  `,
+  ).run({
+    id: String(row.id),
+    name: row.name || null,
+    icon: row.icon || null,
+    ownerId: row.ownerId || row.owner_id || null,
+    memberCount: row.memberCount ?? row.member_count ?? null,
+  });
+  return getGuild(row.id);
+}
+
+function getGuild(guildId) {
+  return db.prepare(`SELECT * FROM guilds WHERE id = ?`).get(String(guildId));
+}
+
+function markGuildInactive(guildId) {
+  db.prepare(
+    `
+    UPDATE guilds
+    SET status = 'inactive', left_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+  `,
+  ).run(String(guildId));
+  return getGuild(guildId);
+}
+
+function upsertUser(userId, tag) {
+  if (!userId) {
+    return;
+  }
+  db.prepare(
+    `
+    INSERT INTO users (id, tag, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET tag = excluded.tag, updated_at = datetime('now')
+  `,
+  ).run(String(userId), tag || null);
+}
+
+function upsertGuildMember({ guildId, userId, tag, status = 'active' }) {
+  upsertUser(userId, tag);
+  db.prepare(
+    `
+    INSERT INTO guild_members (guild_id, user_id, tag, status, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(guild_id, user_id) DO UPDATE SET
+      tag = excluded.tag,
+      status = excluded.status,
+      updated_at = datetime('now')
+  `,
+  ).run(String(guildId), String(userId), tag || null, status);
+}
+
+function ensureDefaultEntitlement(guildId) {
+  db.prepare(
+    `
+    INSERT INTO ai_entitlements (guild_id, plan, status, monthly_limit, source)
+    VALUES (?, 'internal', 'active', 0, 'manual')
+    ON CONFLICT(guild_id) DO NOTHING
+  `,
+  ).run(String(guildId));
+  return db
+    .prepare(`SELECT * FROM ai_entitlements WHERE guild_id = ?`)
+    .get(String(guildId));
+}
+
+function getEntitlement(guildId) {
+  return ensureDefaultEntitlement(guildId);
+}
+
+function setEntitlement(guildId, patch) {
+  const current = getEntitlement(guildId);
+  db.prepare(
+    `
+    UPDATE ai_entitlements
+    SET plan = @plan,
+        status = @status,
+        monthly_limit = @monthlyLimit,
+        source = @source,
+        starts_at = @startsAt,
+        ends_at = @endsAt,
+        updated_at = datetime('now')
+    WHERE guild_id = @guildId
+  `,
+  ).run({
+    guildId: String(guildId),
+    plan: patch.plan || current.plan,
+    status: patch.status || current.status,
+    monthlyLimit: patch.monthlyLimit ?? current.monthly_limit,
+    source: patch.source || current.source,
+    startsAt: patch.startsAt ?? current.starts_at,
+    endsAt: patch.endsAt ?? current.ends_at,
+  });
+  return getEntitlement(guildId);
+}
+
+function countUsageThisMonth(guildId) {
+  const row = db
+    .prepare(
+      `
+      SELECT COUNT(*) AS total
+      FROM ai_usage_events
+      WHERE guild_id = ?
+        AND status IN ('ok', 'reserved', 'committed')
+        AND created_at >= datetime('now', 'start of month')
+    `,
+    )
+    .get(String(guildId));
+  return Number(row?.total || 0);
+}
+
+function insertUsageEvent(event) {
+  const previous = db
+    .prepare(`SELECT status FROM ai_usage_events WHERE request_id = ?`)
+    .get(event.requestId);
+  db.prepare(
+    `
+    INSERT INTO ai_usage_events (
+      request_id, guild_id, user_id, operation, provider, model, status,
+      input_tokens, output_tokens, estimated_cost, latency_ms, retries
+    ) VALUES (
+      @requestId, @guildId, @userId, @operation, @provider, @model, @status,
+      @inputTokens, @outputTokens, @estimatedCost, @latencyMs, @retries
+    )
+    ON CONFLICT(request_id) DO UPDATE SET
+      status = excluded.status,
+      model = excluded.model,
+      input_tokens = excluded.input_tokens,
+      output_tokens = excluded.output_tokens,
+      estimated_cost = excluded.estimated_cost,
+      latency_ms = excluded.latency_ms,
+      retries = excluded.retries
+  `,
+  ).run({
+    requestId: event.requestId,
+    guildId: String(event.guildId),
+    userId: event.userId || null,
+    operation: event.operation || 'question',
+    provider: event.provider || 'openrouter',
+    model: event.model || null,
+    status: event.status,
+    inputTokens: event.inputTokens ?? null,
+    outputTokens: event.outputTokens ?? null,
+    estimatedCost: event.estimatedCost ?? null,
+    latencyMs: event.latencyMs ?? null,
+    retries: event.retries ?? 0,
+  });
+  const alreadyCounted =
+    previous?.status === 'ok' || previous?.status === 'committed';
+  if (
+    (event.status === 'ok' || event.status === 'committed') &&
+    !alreadyCounted
+  ) {
+    const day = new Date().toISOString().slice(0, 10);
+    db.prepare(
+      `
+      INSERT INTO ai_usage_daily (guild_id, day, requests, input_tokens, output_tokens, estimated_cost)
+      VALUES (@guildId, @day, 1, @inputTokens, @outputTokens, @estimatedCost)
+      ON CONFLICT(guild_id, day) DO UPDATE SET
+        requests = requests + 1,
+        input_tokens = input_tokens + excluded.input_tokens,
+        output_tokens = output_tokens + excluded.output_tokens,
+        estimated_cost = estimated_cost + excluded.estimated_cost
+    `,
+    ).run({
+      guildId: String(event.guildId),
+      day,
+      inputTokens: Number(event.inputTokens || 0),
+      outputTokens: Number(event.outputTokens || 0),
+      estimatedCost: Number(event.estimatedCost || 0),
+    });
+  }
+}
+
+function listUsageDaily(guildId, { limit = 31 } = {}) {
+  return db
+    .prepare(
+      `
+      SELECT * FROM ai_usage_daily
+      WHERE guild_id = ?
+      ORDER BY day DESC
+      LIMIT ?
+    `,
+    )
+    .all(String(guildId), limit);
+}
+
+function recordBillingEvent({ provider, externalEventId, eventType, payloadHash }) {
+  const result = db
+    .prepare(
+      `
+      INSERT OR IGNORE INTO billing_events (provider, external_event_id, event_type, payload_hash)
+      VALUES (?, ?, ?, ?)
+    `,
+    )
+    .run(provider, externalEventId, eventType || null, payloadHash || null);
+  return result.changes > 0;
+}
+
+function getGuildCatalog(guildId, kind) {
+  return db
+    .prepare(`SELECT * FROM guild_catalogs WHERE guild_id = ? AND kind = ?`)
+    .get(String(guildId), kind);
+}
+
+function saveGuildCatalog({ guildId, kind, payload, createdBy }) {
+  db.prepare(
+    `
+    INSERT INTO guild_catalogs (guild_id, kind, version, payload_json, created_by)
+    VALUES (?, ?, 1, ?, ?)
+    ON CONFLICT(guild_id, kind) DO UPDATE SET
+      version = version + 1,
+      payload_json = excluded.payload_json,
+      created_by = excluded.created_by,
+      created_at = datetime('now')
+  `,
+  ).run(String(guildId), kind, JSON.stringify(payload), createdBy || null);
+  return getGuildCatalog(guildId, kind);
+}
+
+function listGuildCatalogs(guildId) {
+  return db
+    .prepare(`SELECT kind, version, created_at FROM guild_catalogs WHERE guild_id = ?`)
+    .all(String(guildId));
+}
+
 module.exports = {
   db,
   databasePath,
@@ -1247,6 +1775,7 @@ module.exports = {
   getSettings,
   setSetting,
   syncEnvRoleSettings,
+  bootstrapEnvRolesIfNeeded,
   envRoleId,
   roleIdFromEnv,
   ROLE_ENV,
@@ -1298,4 +1827,19 @@ module.exports = {
   getAiUserTopic,
   setAiUserTopic,
   insertAuditEvent,
+  upsertGuild,
+  getGuild,
+  markGuildInactive,
+  upsertUser,
+  upsertGuildMember,
+  ensureDefaultEntitlement,
+  getEntitlement,
+  setEntitlement,
+  countUsageThisMonth,
+  insertUsageEvent,
+  listUsageDaily,
+  recordBillingEvent,
+  getGuildCatalog,
+  saveGuildCatalog,
+  listGuildCatalogs,
 };

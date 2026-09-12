@@ -30,8 +30,8 @@ const {
   backupDatabase,
   listBackupFiles,
   getHeartbeat,
-  envRoleId,
-  ROLE_ENV,
+  getGuild,
+  upsertGuild,
 } = require('./db');
 const { listKnowledgeDocuments: knowledgeDocs, reloadKnowledge } = require('./knowledge');
 const { inspectQuestion } = require('./ai-router');
@@ -41,6 +41,14 @@ const { farmBoardMessage } = require('./farm-commands');
 const { logEmbed } = require('./embeds');
 const { displayMaterial, formatQuantity, parsePositiveInt, truncate } = require('./util');
 const rest = require('./discord-rest');
+const documents = require('./documents');
+const { BOT_NAME } = require('./brand');
+const { usageSummary, getEntitlementState } = require('./ai-entitlement');
+const {
+  validatePrices,
+  validateActions,
+  validatePartnerships,
+} = require('./catalogs');
 
 function goalsWithProgress(guildId, periodId, onlyUserId = null) {
   return listGoals(guildId, periodId)
@@ -74,10 +82,12 @@ function publicSettings(settings) {
     farmChannelId: settings.farm_channel_id,
     farmPanelMessageId: settings.farm_panel_message_id,
     autoApprove: Number(settings.auto_approve) !== 0,
+    identityName: settings.identity_name || BOT_NAME,
+    presenceText: settings.presence_text || null,
     lockedRoles: {
-      leader: Boolean(envRoleId(ROLE_ENV.leader_role_id)),
-      manager: Boolean(envRoleId(ROLE_ENV.manager_role_id)),
-      member: Boolean(envRoleId(ROLE_ENV.member_role_id)),
+      leader: false,
+      manager: false,
+      member: false,
     },
   };
 }
@@ -285,14 +295,18 @@ function getAuditPage(guildId, { limit = 50, offset = 0 } = {}) {
 }
 
 function getAiPage(guildId) {
+  const usage = usageSummary(guildId);
   return {
-    documents: (knowledgeDocs() || listKnowledgeDocuments()).map((doc) => ({
+    documents: (knowledgeDocs(guildId) || listKnowledgeDocuments(guildId)).map((doc) => ({
       name: doc.name,
       version: doc.version,
       chunks: doc.chunks,
       indexedAt: doc.indexed_at,
       status: doc.status,
+      scope: doc.scope,
+      guildId: doc.guild_id,
     })),
+    guildDocuments: documents.listDocuments(guildId).map(publicGuildDocument),
     misses: listAiMisses({ guildId, limit: 25 }).map((row) => ({
       question: row.question,
       theme: row.theme,
@@ -312,6 +326,8 @@ function getAiPage(guildId) {
       createdAt: row.created_at,
     })),
     circuit: circuitState(),
+    entitlement: usage.entitlement,
+    usage: usage.daily,
   };
 }
 
@@ -321,7 +337,7 @@ function diagnoseQuestion(guildId, userId, question) {
     userId,
     channelId: getSettings(guildId).ai_channel_id || 'web',
   });
-  return inspectQuestion({ question, prior });
+  return inspectQuestion({ question, prior, guildId });
 }
 
 function getStatus() {
@@ -618,6 +634,8 @@ const WEB_SETTING_KEYS = new Set([
   'leader_role_id',
   'manager_role_id',
   'member_role_id',
+  'identity_name',
+  'presence_text',
 ]);
 
 function updateSettings(guildId, actor, patch) {
@@ -627,14 +645,15 @@ function updateSettings(guildId, actor, patch) {
     if (!WEB_SETTING_KEYS.has(key)) {
       continue;
     }
-    if (ROLE_ENV[key] && envRoleId(ROLE_ENV[key])) {
-      const error = new Error(`O cargo ${key} vem do .env e não pode ser alterado aqui.`);
-      error.status = 409;
-      throw error;
-    }
     if (key === 'auto_approve') {
       applied[key] = raw ? 1 : 0;
       setSetting(guildId, key, applied[key]);
+      continue;
+    }
+    if (key === 'identity_name' || key === 'presence_text') {
+      const value = raw == null ? null : truncate(String(raw).trim(), 80) || null;
+      applied[key] = value;
+      setSetting(guildId, key, value);
       continue;
     }
     const value = raw == null || raw === '' ? null : String(raw).trim();
@@ -657,6 +676,9 @@ function updateSettings(guildId, actor, patch) {
 
 function reloadRules(guildId, actor) {
   const result = reloadKnowledge();
+  if (!result.aborted) {
+    documents.reindexPublishedGuildDocs(guildId);
+  }
   audit({
     guildId,
     actorId: actor.userId,
@@ -675,6 +697,186 @@ async function runBackup(guildId, actor) {
     detail: dest,
   });
   return { ok: true, path: dest, backups: listBackupFiles().slice(0, 8) };
+}
+
+function publicGuildDocument(row) {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    category: row.category,
+    status: row.status,
+    publishedVersion: row.published_version || null,
+    updatedAt: row.updated_at,
+    createdAt: row.created_at,
+  };
+}
+
+function publicDocumentDetail(payload) {
+  return {
+    document: publicGuildDocument(payload.document),
+    draft: payload.draft
+      ? {
+          id: payload.draft.id,
+          versionNumber: payload.draft.version_number,
+          content: payload.draft.content,
+          hash: payload.draft.content_hash,
+          message: payload.draft.change_message,
+          updatedAt: payload.draft.created_at,
+        }
+      : null,
+    published: payload.published
+      ? {
+          id: payload.published.id,
+          versionNumber: payload.published.version_number,
+          content: payload.published.content,
+          hash: payload.published.content_hash,
+          publishedAt: payload.published.published_at,
+        }
+      : null,
+    versions: (payload.versions || []).map((row) => ({
+      id: row.id,
+      versionNumber: row.version_number,
+      status: row.status,
+      hash: row.content_hash,
+      message: row.change_message,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      publishedAt: row.published_at,
+    })),
+  };
+}
+
+function getGuildPage(guildId) {
+  const settings = getSettings(guildId);
+  return {
+    botName: BOT_NAME,
+    guild: getGuild(guildId) || {
+      id: guildId,
+      name: null,
+      status: 'unknown',
+    },
+    settings: publicSettings(settings),
+  };
+}
+
+async function refreshGuild(guildId, actor, discord = rest) {
+  const remote = await discord.fetchGuild(guildId);
+  upsertGuild({
+    id: remote.id || guildId,
+    name: remote.name,
+    icon: remote.icon,
+    ownerId: remote.owner_id || remote.ownerId,
+    memberCount: remote.approximate_member_count || remote.memberCount || null,
+  });
+  audit({
+    guildId,
+    actorId: actor.userId,
+    action: 'guild.refresh.web',
+  });
+  return getGuildPage(guildId);
+}
+
+function updateGuildIdentity(guildId, actor, patch) {
+  return updateSettings(guildId, actor, {
+    identity_name: patch.identityName ?? patch.identity_name,
+    presence_text: patch.presenceText ?? patch.presence_text,
+  });
+}
+
+function listGuildDocuments(guildId, { status } = {}) {
+  const rows = documents.listDocuments(guildId);
+  return {
+    documents: rows
+      .filter((row) => !status || row.status === status)
+      .map(publicGuildDocument),
+  };
+}
+
+function getGuildDocument(guildId, id) {
+  return publicDocumentDetail(documents.getDocument(guildId, id));
+}
+
+function createGuildDocument(guildId, actor, payload) {
+  return publicDocumentDetail(documents.createDocument(guildId, actor, payload));
+}
+
+function updateGuildDocument(guildId, actor, id, payload) {
+  return publicDocumentDetail(documents.updateDraft(guildId, id, actor, payload));
+}
+
+function listDocumentVersions(guildId, id) {
+  return { versions: publicDocumentDetail(documents.getDocument(guildId, id)).versions };
+}
+
+function restoreDocumentVersion(guildId, actor, id, versionNumber) {
+  return publicDocumentDetail(
+    documents.restoreVersion(guildId, id, actor, versionNumber),
+  );
+}
+
+function validateGuildDocuments(guildId, documentIds) {
+  const result = documents.validateDocuments(guildId, documentIds);
+  return {
+    ok: result.ok,
+    rejected: result.rejected,
+    accepted: result.accepted.map((item) => publicGuildDocument(item.document)),
+  };
+}
+
+function publishGuildDocuments(guildId, actor, payload) {
+  return documents.publishDocuments(guildId, actor, payload);
+}
+
+function listGuildReleases(guildId) {
+  return {
+    releases: documents.listReleases(guildId).map((row) => ({
+      id: row.id,
+      releaseNumber: row.release_number,
+      status: row.status,
+      message: row.message,
+      createdBy: row.created_by,
+      publishedAt: row.published_at,
+    })),
+  };
+}
+
+function rollbackGuildRelease(guildId, actor, releaseId) {
+  return documents.rollbackRelease(guildId, actor, releaseId);
+}
+
+function getGuildCatalogs(guildId) {
+  return { catalogs: documents.listGuildCatalogs(guildId) };
+}
+
+function importGuildCatalog(guildId, actor, kind, items) {
+  const validators = {
+    prices: validatePrices,
+    actions: validateActions,
+    partnerships: validatePartnerships,
+  };
+  const validate = validators[kind];
+  if (!validate) {
+    const error = new Error('Catálogo desconhecido.');
+    error.status = 400;
+    throw error;
+  }
+  const errors = validate(items);
+  if (errors.length) {
+    const error = new Error(errors[0]);
+    error.status = 400;
+    error.rejected = errors;
+    throw error;
+  }
+  return documents.importCatalog(guildId, actor, kind, items);
+}
+
+function getAiEntitlements(guildId) {
+  return getEntitlementState(guildId);
+}
+
+function getAiUsage(guildId) {
+  return usageSummary(guildId);
 }
 
 module.exports = {
@@ -698,4 +900,21 @@ module.exports = {
   updateSettings,
   reloadRules,
   runBackup,
+  getGuildPage,
+  refreshGuild,
+  updateGuildIdentity,
+  listGuildDocuments,
+  getGuildDocument,
+  createGuildDocument,
+  updateGuildDocument,
+  listDocumentVersions,
+  restoreDocumentVersion,
+  validateGuildDocuments,
+  publishGuildDocuments,
+  listGuildReleases,
+  rollbackGuildRelease,
+  getGuildCatalogs,
+  importGuildCatalog,
+  getAiEntitlements,
+  getAiUsage,
 };

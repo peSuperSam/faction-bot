@@ -174,7 +174,21 @@ function reloadCatalogs() {
   return { ok: true, errors: [], catalogs: cachedCatalogs };
 }
 
-function getCatalog(name) {
+function getCatalog(name, guildId = null) {
+  if (guildId && guildId !== '__global__') {
+    const { getGuildCatalog } = require('./db');
+    const row = getGuildCatalog(guildId, name);
+    if (row?.payload_json) {
+      try {
+        const parsed = JSON.parse(row.payload_json);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed;
+        }
+      } catch {
+        // fallback para o catálogo global
+      }
+    }
+  }
   if (!cachedCatalogs) {
     const result = reloadCatalogs();
     if (!result.ok) {

@@ -47,14 +47,14 @@ function isNewStandaloneQuestion(value) {
   return false;
 }
 
-function looksLikeRuleQuestion(value, priorRule) {
+function looksLikeRuleQuestion(value, priorRule, guildId = null) {
   if (isCasualMessage(value)) {
     return false;
   }
   if (questionHasIndexedAcronym(value)) {
     return true;
   }
-  const parsed = parseQuestion(value, priorRule);
+  const parsed = parseQuestion(value, priorRule, guildId);
   if (
     parsed.intent === 'price' ||
     parsed.intent === 'partner' ||
@@ -120,8 +120,8 @@ function clarifyHit(ambiguity) {
   };
 }
 
-function resolveStructuredCards({ question, prior, followUp }) {
-  const parsed = parseQuestion(question, followUp ? prior : null);
+function resolveStructuredCards({ question, prior, followUp, guildId = null }) {
+  const parsed = parseQuestion(question, followUp ? prior : null, guildId);
   const activePrior = followUp ? prior : null;
 
   if (parsed.ambiguity) {
@@ -141,6 +141,7 @@ function resolveStructuredCards({ question, prior, followUp }) {
       const cards = partnershipCards({
         question,
         priorIds: activePrior?.ids,
+        guildId,
       });
       if (cards.length > 0) {
         return structuredHit(
@@ -156,6 +157,7 @@ function resolveStructuredCards({ question, prior, followUp }) {
   const priceHits = priceCards({
     question,
     priorIds: activePrior?.theme === 'price' ? activePrior.ids : [],
+    guildId,
   });
   if (
     priceHits.length > 0 &&
@@ -189,7 +191,7 @@ function resolveStructuredCards({ question, prior, followUp }) {
     );
   }
 
-  const filterHits = actionFilterCards({ question });
+  const filterHits = actionFilterCards({ question, guildId });
   if (
     filterHits.length > 0 &&
     (parsed.theme === 'action' || isActionFilterQuestion(question))
@@ -202,10 +204,10 @@ function resolveStructuredCards({ question, prior, followUp }) {
     );
   }
 
-  const detailHits = actionDetailCards({ question });
+  const detailHits = actionDetailCards({ question, guildId });
   if (
     detailHits.length > 0 &&
-    (parsed.theme === 'action' || isNamedActionQuestion(question))
+    (parsed.theme === 'action' || isNamedActionQuestion(question, guildId))
   ) {
     return structuredHit(
       'action',
@@ -215,7 +217,7 @@ function resolveStructuredCards({ question, prior, followUp }) {
     );
   }
 
-  const listHits = actionListCards({ question });
+  const listHits = actionListCards({ question, guildId });
   if (listHits.length > 0) {
     return structuredHit(
       'action',
@@ -262,8 +264,8 @@ function isWeakSearch(chunks, theme) {
   return false;
 }
 
-function inspectQuestion({ question, prior = null } = {}) {
-  const parsed = parseQuestion(question, prior);
+function inspectQuestion({ question, prior = null, guildId = null } = {}) {
+  const parsed = parseQuestion(question, prior, guildId);
   const themeNow = parsed.theme;
   const themeChanged = Boolean(
     themeNow && prior?.theme && themeNow !== prior.theme,
@@ -278,11 +280,12 @@ function inspectQuestion({ question, prior = null } = {}) {
     question,
     prior: followUp ? prior : null,
     followUp,
+    guildId,
   });
   const searchQuery = followUp
     ? `${prior?.query || prior?.topic || ''} ${question}`.trim()
     : question;
-  const chunks = searchRules(searchQuery, 4);
+  const chunks = searchRules(searchQuery, 4, guildId);
   let path = 'rag';
   let reason = 'busca nos trechos oficiais';
   if (parsed.intent === 'clarify' || structured?.theme === 'clarify') {

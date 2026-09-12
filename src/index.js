@@ -5,17 +5,16 @@ const path = require('path');
 const {
   Client,
   GatewayIntentBits,
-  REST,
-  Routes,
   Events,
 } = require('discord.js');
-const { db, databasePath, syncEnvRoleSettings, backupDatabase, pruneAiLogs, pruneMemberEvents, pruneAuditEvents, touchHeartbeat } = require('./db');
+const { db, databasePath, backupDatabase, pruneAiLogs, pruneMemberEvents, pruneAuditEvents, touchHeartbeat } = require('./db');
 const { reloadKnowledge } = require('./knowledge');
-const { commandJson, handleInteraction, handleAiChannelMessage } = require('./commands');
-const { applyAdminChannelPermissions } = require('./staff-channel');
+const { handleInteraction, handleAiChannelMessage } = require('./commands');
 const { validateStartupEnv } = require('./startup');
 const { pruneExpiredContext } = require('./user-context');
 const { registerMemberEventListeners } = require('./member-events');
+const { initializeGuild, deactivateGuild, registerGlobalCommands } = require('./guild-lifecycle');
+const { BOT_NAME } = require('./brand');
 
 const lockPath = path.join(__dirname, '..', 'data', 'bot.lock');
 
@@ -159,43 +158,28 @@ client.once(Events.ClientReady, async (readyClient) => {
     } catch (error) {
       console.warn('Falha na limpeza de logs/contexto:', error.message);
     }
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    await rest.put(
-      Routes.applicationGuildCommands(
-        process.env.DISCORD_CLIENT_ID,
-        process.env.DISCORD_GUILD_ID,
-      ),
-      { body: commandJson() },
-    );
-
-    const settings = syncEnvRoleSettings(process.env.DISCORD_GUILD_ID);
-    console.log(
-      `Cargos: líder=${settings.leader_role_id || '—'} gerente=${settings.manager_role_id || '—'} membro=${settings.member_role_id || '—'}`,
-    );
-    if (settings.admin_channel_id) {
-      const adminChannel = await readyClient.channels
-        .fetch(settings.admin_channel_id)
-        .catch(() => null);
-      if (adminChannel?.isTextBased()) {
-        const perms = await applyAdminChannelPermissions(adminChannel, settings);
-        if (!perms.ok) {
-          console.warn(perms.message);
-        } else if (perms.notes.length) {
-          for (const note of perms.notes) {
-            console.warn(note);
-          }
-        } else {
-          console.log('Permissões do canal da administração sincronizadas.');
-        }
+    try {
+      await registerGlobalCommands();
+    } catch (error) {
+      console.warn('Falha ao registrar comandos globais:', error.message);
+    }
+    for (const guild of readyClient.guilds.cache.values()) {
+      try {
+        const settings = await initializeGuild(readyClient, guild);
+        console.log(
+          `[${guild.name}] cargos líder=${settings.leader_role_id || '—'} gerente=${settings.manager_role_id || '—'} membro=${settings.member_role_id || '—'}`,
+        );
+      } catch (error) {
+        console.warn(`Falha ao inicializar a guilda ${guild.id}:`, error.message);
       }
     }
 
-    console.log(`Bot conectado como ${readyClient.user.tag}`);
+    console.log(`${BOT_NAME} conectado como ${readyClient.user.tag}`);
     console.log(`Banco SQLite: ${databasePath}`);
     console.log(
-      `Regras indexadas: ${indexed.indexed} documento(s), ${indexed.rejected.length} recusado(s).`,
+      `Regras globais indexadas: ${indexed.indexed} documento(s), ${indexed.rejected.length} recusado(s).`,
     );
-    console.log('Comandos registrados no servidor de teste.');
+    console.log(`Guildas ativas: ${readyClient.guilds.cache.size}`);
   } catch (error) {
     console.error('Falha na inicialização do bot:', error);
     try {
@@ -215,6 +199,18 @@ client.once(Events.ClientReady, async (readyClient) => {
 
 client.on(Events.InteractionCreate, handleInteraction);
 client.on(Events.MessageCreate, handleAiChannelMessage);
+client.on(Events.GuildCreate, (guild) => {
+  initializeGuild(client, guild).catch((error) => {
+    console.warn(`Falha no onboarding da guilda ${guild.id}:`, error.message);
+  });
+});
+client.on(Events.GuildDelete, (guild) => {
+  try {
+    deactivateGuild(guild.id);
+  } catch (error) {
+    console.warn(`Falha ao marcar guilda inativa ${guild.id}:`, error.message);
+  }
+});
 client.on(Events.Error, (error) => {
   console.error('Erro do cliente Discord:', error);
 });

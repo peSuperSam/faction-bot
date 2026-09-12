@@ -256,4 +256,58 @@ describe('API web', () => {
       },
     );
   });
+
+  it('documentos e entitlement ficam na guilda da sessão', async () => {
+    const discord = discordFor('u-admin', ['admin-role'], {
+      adminRolePerm: ADMIN_PERM,
+      ownerId: 'u-admin',
+      botGuilds: [
+        { id: 'guild-api', name: 'Facção', icon: null },
+        { id: 'guild-a', name: 'Facção A', icon: null },
+      ],
+    });
+    await withServer(discord, async (port) => {
+      const created = await call(port, {
+        method: 'POST',
+        path: '/v1/documents',
+        userId: 'u-admin',
+        guildId: 'guild-api',
+        body: {
+          title: 'Local API',
+          slug: 'local-api',
+          content: '## Teste\n\nDocumento exclusivo da guild-api com termo zinnia-77.',
+        },
+      });
+      assert.equal(created.status, 200);
+      const published = await call(port, {
+        method: 'POST',
+        path: '/v1/documents/publish',
+        userId: 'u-admin',
+        guildId: 'guild-api',
+        body: { documentIds: [created.json.document.id] },
+      });
+      assert.equal(published.status, 200);
+      assert.equal(published.json.ok, true);
+
+      const otherList = await call(port, {
+        path: '/v1/documents',
+        userId: 'u-admin',
+        guildId: 'guild-a',
+      });
+      assert.equal(otherList.status, 200);
+      assert.equal(
+        (otherList.json.documents || []).some((doc) => doc.slug === 'local-api'),
+        false,
+      );
+
+      const entitlements = await call(port, {
+        path: '/v1/ai/entitlements',
+        userId: 'u-admin',
+        guildId: 'guild-api',
+      });
+      assert.equal(entitlements.status, 200);
+      assert.equal(entitlements.json.guildId, 'guild-api');
+      assert.equal(entitlements.json.plan, 'internal');
+    });
+  });
 });

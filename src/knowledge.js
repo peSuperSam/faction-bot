@@ -11,6 +11,7 @@ const {
 const { syncPartnershipMarkdown } = require('./media');
 const { reloadCatalogs, syncPriceMarkdown, getCatalog } = require('./catalogs');
 const { parseQuestion } = require('./question-parse');
+const { GLOBAL_GUILD_ID, GLOBAL_SCOPE } = require('./brand');
 
 const rulesPath = path.resolve(process.env.RULES_PATH || './rules');
 const SKIP_FILES = new Set(['readme.md', 'readme.txt']);
@@ -19,36 +20,7 @@ function hashContent(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-function chunkText(content) {
-  const parts = content.split(/(?=^#{1,3} )/m).filter((part) => part.trim());
-  const chunks = [];
-
-  for (const part of parts) {
-    const headerMatch = part.match(/^#{1,3} (.+)/);
-    const section = headerMatch ? headerMatch[1].trim() : 'geral';
-    const body = part.trim();
-    if (body.length < 20) {
-      continue;
-    }
-
-    const paragraphs = body.split(/\n{2,}/);
-    let current = '';
-    for (const paragraph of paragraphs) {
-      const next = current ? `${current}\n\n${paragraph}` : paragraph;
-      if (next.length > 800 && current) {
-        chunks.push({ section, content: current.trim() });
-        current = paragraph;
-      } else {
-        current = next;
-      }
-    }
-    if (current.trim()) {
-      chunks.push({ section, content: current.trim() });
-    }
-  }
-
-  return chunks;
-}
+const { chunkText } = require('./knowledge-util');
 
 function walkRuleFiles(dir, base = dir) {
   const files = [];
@@ -334,7 +306,7 @@ function rebuildAcronymIndex(files) {
 
 function reloadKnowledge() {
   const catalogResult = reloadCatalogs();
-  const currentDocs = listKnowledgeDocuments();
+  const currentDocs = listKnowledgeDocuments(GLOBAL_GUILD_ID);
   if (!catalogResult.ok) {
     return {
       indexed: currentDocs.length,
@@ -389,12 +361,12 @@ function reloadKnowledge() {
     };
   }
 
-  replaceKnowledge(accepted);
+  replaceKnowledge(accepted, { guildId: GLOBAL_GUILD_ID, scope: GLOBAL_SCOPE });
   rebuildAcronymIndex(files);
   return {
     indexed: accepted.length,
     rejected,
-    documents: listKnowledgeDocuments(),
+    documents: listKnowledgeDocuments(GLOBAL_GUILD_ID),
   };
 }
 
@@ -413,8 +385,8 @@ const PRICE_NOISE = new Set([
   'unidade',
 ]);
 
-function documentPrefixFor(question) {
-  const parsed = parseQuestion(question);
+function documentPrefixFor(question, guildId = null) {
+  const parsed = parseQuestion(question, null, guildId);
   if (parsed.intent === 'clarify') {
     return null;
   }
@@ -430,13 +402,13 @@ function documentPrefixFor(question) {
   return null;
 }
 
-function catalogTokensFor(question) {
-  const parsed = parseQuestion(question);
+function catalogTokensFor(question, guildId = null) {
+  const parsed = parseQuestion(question, null, guildId);
   const extra = [];
   const catalogs = {
-    prices: getCatalog('prices'),
-    actions: getCatalog('actions'),
-    partnerships: getCatalog('partnerships'),
+    prices: getCatalog('prices', guildId),
+    actions: getCatalog('actions', guildId),
+    partnerships: getCatalog('partnerships', guildId),
   };
   for (const [kind, ids] of Object.entries(parsed.entities || {})) {
     const items = catalogs[kind] || [];
@@ -459,7 +431,7 @@ function catalogTokensFor(question) {
   return extra.filter(Boolean);
 }
 
-function expandSearchTokens(tokens, question = '') {
+function expandSearchTokens(tokens, question = '', guildId = null) {
   const seen = new Set(tokens);
   const expanded = [...tokens];
   const hasAction = tokens.some((token) =>
@@ -480,7 +452,7 @@ function expandSearchTokens(tokens, question = '') {
     synonyms.maior = ['contingente', 'maximo'];
     synonyms.menor = ['contingente', 'minimo'];
   }
-  for (const token of [...tokens, ...catalogTokensFor(question)]) {
+  for (const token of [...tokens, ...catalogTokensFor(question, guildId)]) {
     if (!seen.has(token) && token) {
       seen.add(token);
       expanded.push(token);
@@ -495,8 +467,8 @@ function expandSearchTokens(tokens, question = '') {
   return expanded.slice(0, 12);
 }
 
-function routeBoost(documentName, question) {
-  const parsed = parseQuestion(question);
+function routeBoost(documentName, question, guildId = null) {
+  const parsed = parseQuestion(question, null, guildId);
   const doc = normalizeSearchText(documentName);
   let boost = 0;
   const isAction = parsed.theme === 'action';
@@ -611,7 +583,7 @@ function hasWholeWord(haystack, token) {
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(haystack);
 }
 
-function scoreChunk(chunk, tokens, question = '') {
+function scoreChunk(chunk, tokens, question = '', guildId = null) {
   const section = normalizeSearchText(chunk.section || '');
   const content = normalizeSearchText(chunk.content || '');
   const documentName = normalizeSearchText(chunk.document_name || '');
@@ -655,13 +627,13 @@ function scoreChunk(chunk, tokens, question = '') {
   if (documentName.includes('00_indice')) {
     score -= 12;
   }
-  score += routeBoost(chunk.document_name, question);
+  score += routeBoost(chunk.document_name, question, guildId);
   return score;
 }
 
-function rankRows(rows, tokens, limit, question = '') {
+function rankRows(rows, tokens, limit, question = '', guildId = null) {
   const ranked = rows
-    .map((row) => ({ ...row, score: scoreChunk(row, tokens, question) }))
+    .map((row) => ({ ...row, score: scoreChunk(row, tokens, question, guildId) }))
     .sort((a, b) => b.score - a.score || (a.rank || 0) - (b.rank || 0))
     .filter((row) => row.score > 0);
 
@@ -683,7 +655,7 @@ function rankRows(rows, tokens, limit, question = '') {
   return ranked.filter((row) => row.score >= 6).slice(0, Math.min(limit, 4));
 }
 
-function expandToFullSections(ranked, charBudget = 6000) {
+function expandToFullSections(ranked, charBudget = 6000, guildId = null) {
   const seen = new Set();
   const sections = [];
   for (const row of ranked) {
@@ -692,7 +664,7 @@ function expandToFullSections(ranked, charBudget = 6000) {
       continue;
     }
     seen.add(key);
-    const parts = listChunksBySection(row.document_name, row.section);
+    const parts = listChunksBySection(row.document_name, row.section, guildId);
     const content =
       parts.length > 0
         ? parts.map((part) => part.content).join('\n\n')
@@ -729,9 +701,9 @@ function applyPrefix(rows, prefix) {
   );
 }
 
-function searchRules(question, limit = 4) {
-  let tokens = expandSearchTokens(extractTopicTerms(question), question);
-  const prefix = documentPrefixFor(question);
+function searchRules(question, limit = 4, guildId = null) {
+  let tokens = expandSearchTokens(extractTopicTerms(question), question, guildId);
+  const prefix = documentPrefixFor(question, guildId);
   if (prefix === '09_precos/') {
     tokens = tokens.filter((token) => !PRICE_NOISE.has(token));
   }
@@ -747,7 +719,7 @@ function searchRules(question, limit = 4) {
   let ranked = [];
   for (const query of attempts) {
     try {
-      ranked = rankRows(searchKnowledge(query, 40), tokens, 12, question);
+      ranked = rankRows(searchKnowledge(query, 40, guildId), tokens, 12, question, guildId);
       ranked = applyPrefix(ranked, prefix);
       if (ranked.length > 0) {
         break;
@@ -760,7 +732,7 @@ function searchRules(question, limit = 4) {
   if (ranked.length === 0) {
     try {
       ranked = applyPrefix(
-        rankRows(searchKnowledgeLike(tokens, 40), tokens, 12, question),
+        rankRows(searchKnowledgeLike(tokens, 40, guildId), tokens, 12, question, guildId),
         prefix,
       );
     } catch (error) {
@@ -772,10 +744,11 @@ function searchRules(question, limit = 4) {
   if (ranked.length === 0 && prefix) {
     try {
       ranked = rankRows(
-        searchKnowledge(attempts[0], 40),
+        searchKnowledge(attempts[0], 40, guildId),
         tokens,
         12,
         question,
+        guildId,
       );
     } catch {
       ranked = [];
@@ -794,7 +767,7 @@ function searchRules(question, limit = 4) {
     ranked = ranked.slice(0, 1);
   }
 
-  return expandToFullSections(ranked, 6000).slice(0, limit);
+  return expandToFullSections(ranked, 6000, guildId).slice(0, limit);
 }
 
 module.exports = {
@@ -805,4 +778,5 @@ module.exports = {
   extractTopicTerms,
   questionHasIndexedAcronym,
   documentPrefixFor,
+  chunkText,
 };

@@ -5,6 +5,30 @@
     </div>
     <p v-if="message" class="banner" :class="ok ? 'ok' : 'bad'">{{ message }}</p>
     <article class="card">
+      <h2>Plano e cota</h2>
+      <div class="quota-grid">
+        <div class="quota-card">
+          <span>Plano</span>
+          <strong>{{ data?.entitlement?.plan || '—' }}</strong>
+        </div>
+        <div class="quota-card">
+          <span>Status</span>
+          <strong>{{ data?.entitlement?.status || '—' }}</strong>
+        </div>
+        <div class="quota-card">
+          <span>Uso no mês</span>
+          <strong>{{ data?.entitlement?.used ?? 0 }}</strong>
+        </div>
+        <div class="quota-card">
+          <span>Limite</span>
+          <strong>{{ data?.entitlement?.unlimited ? 'Ilimitado' : (data?.entitlement?.monthlyLimit ?? '—') }}</strong>
+        </div>
+      </div>
+      <p class="muted" style="margin-top: 12px">
+        Circuito da IA: {{ data?.circuit?.open ? 'aberto' : 'fechado' }}.
+      </p>
+    </article>
+    <article class="card" style="margin-top: 16px">
       <h2>Diagnóstico</h2>
       <form @submit.prevent="diagnose">
         <label class="field">
@@ -23,13 +47,33 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Documento</th><th>Trechos</th><th>Indexado</th></tr>
+            <tr><th>Documento</th><th>Escopo</th><th>Trechos</th><th>Indexado</th></tr>
           </thead>
           <tbody>
-            <tr v-for="doc in data?.documents || []" :key="doc.name">
+            <tr v-for="doc in data?.documents || []" :key="doc.scope + doc.name">
               <td>{{ doc.name }}</td>
+              <td>{{ doc.scope || 'global' }}</td>
               <td>{{ doc.chunks }}</td>
               <td>{{ doc.indexedAt }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+    <article class="card" style="margin-top: 16px">
+      <h2>Consumo diário</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Dia</th><th>Pedidos</th><th>Tokens in</th><th>Tokens out</th><th>Custo est.</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in data?.usage || []" :key="row.day">
+              <td>{{ row.day }}</td>
+              <td>{{ row.requests }}</td>
+              <td>{{ row.input_tokens }}</td>
+              <td>{{ row.output_tokens }}</td>
+              <td>{{ row.estimated_cost }}</td>
             </tr>
           </tbody>
         </table>

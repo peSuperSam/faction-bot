@@ -19,12 +19,17 @@ function assertQuestionSize(question) {
   }
 }
 
-function noteAiRequest(userId) {
+function limitKey(userId, guildId) {
+  return `${guildId || ''}:${userId || ''}`;
+}
+
+function noteAiRequest(userId, guildId) {
   if (!userId) {
     return;
   }
+  const key = limitKey(userId, guildId);
   const now = Date.now();
-  const stamps = (userWindow.get(userId) || []).filter(
+  const stamps = (userWindow.get(key) || []).filter(
     (stamp) => now - stamp < WINDOW_MS,
   );
   if (stamps.length >= WINDOW_MAX) {
@@ -35,12 +40,13 @@ function noteAiRequest(userId) {
     throw error;
   }
   stamps.push(now);
-  userWindow.set(userId, stamps);
+  userWindow.set(key, stamps);
 }
 
-function acquireAiSlot(userId) {
+function acquireAiSlot(userId, guildId) {
+  const key = limitKey(userId, guildId);
   const now = Date.now();
-  const last = userLast.get(userId) || 0;
+  const last = userLast.get(key) || 0;
   if (now - last < COOLDOWN_MS) {
     const wait = Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
     const error = new Error(
@@ -49,7 +55,7 @@ function acquireAiSlot(userId) {
     error.code = 'AI_COOLDOWN';
     throw error;
   }
-  if (userBusy.has(userId)) {
+  if (userBusy.has(key)) {
     const error = new Error('Ainda estou respondendo sua mensagem anterior.');
     error.code = 'AI_BUSY';
     throw error;
@@ -59,11 +65,11 @@ function acquireAiSlot(userId) {
     error.code = 'AI_BUSY';
     throw error;
   }
-  userBusy.add(userId);
+  userBusy.add(key);
   globalActive += 1;
-  userLast.set(userId, now);
+  userLast.set(key, now);
   return () => {
-    userBusy.delete(userId);
+    userBusy.delete(key);
     globalActive = Math.max(0, globalActive - 1);
   };
 }
