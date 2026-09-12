@@ -1,12 +1,30 @@
 <template>
   <div class="shell" v-if="me">
     <nav class="side">
-      <div>
-        <div class="brand" style="font-size: 28px; color: var(--gold)">Coroa</div>
-        <div class="muted">{{ me.guild?.name || 'Servidor' }}</div>
-        <div class="muted">{{ me.user.tag }} · {{ label(me.user.role) }}</div>
+      <div class="side-brand">
+        <div class="brand-mark">C</div>
+        <div>
+          <div class="brand">Coroa</div>
+          <div class="brand-subtitle">Painel de gestão</div>
+        </div>
       </div>
-      <div>
+      <div class="guild-card">
+        <div class="guild-avatar">{{ initial(me.guild?.name) }}</div>
+        <div class="guild-copy">
+          <span class="eyebrow">SERVIDOR ATUAL</span>
+          <strong>{{ me.guild?.name || 'Servidor' }}</strong>
+        </div>
+        <span class="guild-status"></span>
+      </div>
+      <div class="user-card">
+        <div class="user-avatar">{{ initial(me.user.tag) }}</div>
+        <div>
+          <strong>{{ me.user.tag }}</strong>
+          <div class="muted">{{ label(me.user.role) }}</div>
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">Navegação</div>
         <router-link to="/">Resumo</router-link>
         <router-link to="/farm">Farm</router-link>
         <router-link v-if="can('manager')" to="/membros">Membros</router-link>
@@ -16,7 +34,10 @@
         <router-link to="/status">Status</router-link>
         <router-link to="/servidores">Trocar servidor</router-link>
       </div>
-      <a class="muted" href="/api/auth/logout">Sair</a>
+      <div class="side-footer">
+        <router-link to="/servidores">⇄ <span>Trocar servidor</span></router-link>
+        <a class="muted" href="/api/auth/logout">↪ <span>Sair</span></a>
+      </div>
     </nav>
     <div class="main">
       <router-view :me="me" @refresh="reload" />
@@ -44,6 +65,10 @@ function label(role) {
 
 function can(min) {
   return (rank[me.value?.user?.role] || 0) >= rank[min];
+}
+
+function initial(value) {
+  return String(value || '?').trim().slice(0, 1).toUpperCase();
 }
 
 async function reload() {
