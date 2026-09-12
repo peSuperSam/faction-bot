@@ -1,6 +1,6 @@
 <template>
-  <main class="landing">
-    <nav class="landing-nav">
+  <main class="landing" :class="{ 'is-ready': ready }">
+    <nav class="landing-nav reveal">
       <router-link class="landing-brand" to="/">
         <span class="brand-mark">O</span>
         <span>
@@ -30,7 +30,7 @@
           Permissões verificadas em cada ação
         </div>
       </div>
-      <div class="hero-visual" aria-label="Prévia do dashboard">
+      <div class="hero-visual reveal" aria-label="Prévia do dashboard">
         <div class="visual-glow"></div>
         <div class="mock-window">
           <div class="mock-topbar">
@@ -76,27 +76,30 @@
       </div>
     </section>
 
-    <section id="recursos" class="landing-section">
-      <div class="section-heading">
+    <section id="recursos" class="landing-section reveal-on-scroll">
+      <div class="section-heading reveal-on-scroll">
         <div class="eyebrow">TUDO EM UM SÓ LUGAR</div>
         <h2>Feito para transformar<br /><em>rotina em resultado.</em></h2>
       </div>
       <div class="feature-grid">
-        <article class="feature-card feature-primary">
+        <article
+          class="feature-card feature-primary reveal-on-scroll"
+          style="--delay: 0ms"
+        >
           <span class="feature-number">01</span>
           <div class="feature-icon">↗</div>
           <h3>Metas que movem<br />a operação</h3>
           <p>Defina objetivos semanais e acompanhe o progresso da equipe em tempo real.</p>
           <div class="feature-line"></div>
         </article>
-        <article class="feature-card">
+        <article class="feature-card reveal-on-scroll" style="--delay: 90ms">
           <span class="feature-number">02</span>
           <div class="feature-icon">✓</div>
           <h3>Registros sem<br />perder o controle</h3>
           <p>Revise, aprove e audite cada lançamento com clareza e segurança.</p>
           <div class="feature-line"></div>
         </article>
-        <article class="feature-card">
+        <article class="feature-card reveal-on-scroll" style="--delay: 180ms">
           <span class="feature-number">03</span>
           <div class="feature-icon">♛</div>
           <h3>Desempenho que<br />você consegue ver</h3>
@@ -106,15 +109,15 @@
       </div>
     </section>
 
-    <section class="landing-security">
-      <div>
+    <section class="landing-security reveal-on-scroll">
+      <div class="reveal-on-scroll">
         <div class="eyebrow">ACESSO SOB CONTROLE</div>
         <h2>Sua operação.<br /><em>Suas regras.</em></h2>
       </div>
       <div class="security-items">
-        <div><span>✓</span><p><strong>Permissões do Discord</strong><br />Apenas administradores autorizados entram.</p></div>
-        <div><span>↻</span><p><strong>Validação contínua</strong><br />Cada ação é revalidada no servidor.</p></div>
-        <div><span>⌁</span><p><strong>Servidor certo</strong><br />Sessão vinculada ao servidor escolhido.</p></div>
+        <div class="reveal-on-scroll" style="--delay: 0ms"><span>✓</span><p><strong>Permissões do Discord</strong><br />Apenas administradores autorizados entram.</p></div>
+        <div class="reveal-on-scroll" style="--delay: 90ms"><span>↻</span><p><strong>Validação contínua</strong><br />Cada ação é revalidada no servidor.</p></div>
+        <div class="reveal-on-scroll" style="--delay: 180ms"><span>⌁</span><p><strong>Servidor certo</strong><br />Sessão vinculada ao servidor escolhido.</p></div>
       </div>
     </section>
 
@@ -127,17 +130,40 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { fetchMe } from '../api';
 import { SITE_NAME, SITE_TAGLINE } from '../brand';
 
 const panelHref = ref('/api/auth/discord');
+const ready = ref(false);
+let observer;
 
 onMounted(async () => {
+  ready.value = true;
+  await nextTick();
+  const elements = document.querySelectorAll('.reveal-on-scroll');
+  if ('IntersectionObserver' in window) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in-view');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12 },
+    );
+    elements.forEach((element) => observer.observe(element));
+  } else {
+    elements.forEach((element) => element.classList.add('in-view'));
+  }
   const me = await fetchMe();
   if (!me) {
     return;
   }
   panelHref.value = me.needsGuild || !me.guild?.id ? '/servidores' : '/painel';
 });
+
+onBeforeUnmount(() => observer?.disconnect());
 </script>
